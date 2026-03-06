@@ -1,0 +1,9 @@
+{
+  "name": "pdf-reading-companion",
+  "private": true,
+  "type": "module",
+  "description": "Local-first PDF reading and note capture app for static hosting.",
+  "scripts": {
+    "serve": "python3 -m http.server 4173"
+  }
+}

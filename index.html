@@ -1,151 +1,646 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>PDF Reading Companion</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="A calm, local-first PDF study tool with a focused reader, quiet notes, and local backups."
-    >
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      content="PDF Reading Companion is a calm, local-first study workspace for reading PDFs, taking page-linked notes, and revising with zero cloud upload."
+    />
+    <title>PDF Reading Companion</title>
+    <link rel="icon" href="./assets/app-icon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Lexend:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
-    >
-    <link rel="stylesheet" href="./styles/base.css">
-    <link rel="stylesheet" href="./styles/layout.css">
-    <link rel="stylesheet" href="./styles/components.css">
-    <link rel="stylesheet" href="./styles/themes.css">
+    />
+    <link rel="stylesheet" href="./styles/base.css" />
+    <link rel="stylesheet" href="./styles/layout.css" />
+    <link rel="stylesheet" href="./styles/components.css" />
+    <link rel="stylesheet" href="./styles/themes.css" />
   </head>
-  <body data-page="home">
-    <input id="pdfFileInput" type="file" accept="application/pdf" hidden>
+  <body data-theme="light">
+    <div class="app-shell" id="appShell">
+      <input id="pdfFileInput" type="file" accept="application/pdf" hidden />
+      <input id="jsonImportInput" type="file" accept="application/json" hidden />
 
-    <div class="site-shell">
-      <header class="site-header surface">
-        <div class="brand">
-          <div class="brand-mark" aria-hidden="true">PR</div>
-          <div>
-            <p class="eyebrow">Local-first study instrument</p>
-            <h1>PDF Reading Companion</h1>
+      <header class="topbar" aria-label="Primary toolbar">
+        <div class="topbar__brand">
+          <button class="brand-button" id="homeBtn" type="button" aria-label="Go to home view">
+            <img src="./assets/app-icon.svg" alt="" class="brand-button__icon" />
+            <span>PDF Reading Companion</span>
+          </button>
+          <p class="topbar__subtitle" id="topbarDocumentLabel">Local-only study workspace</p>
+        </div>
+
+        <div class="topbar__center">
+          <div class="page-controls" id="pageControls" aria-label="Page navigation">
+            <button class="icon-button" id="prevPageBtn" type="button" aria-label="Previous page">
+              <span aria-hidden="true">&#8249;</span>
+            </button>
+            <form class="page-controls__form" id="pageJumpForm">
+              <label class="sr-only" for="pageInput">Jump to page</label>
+              <input
+                id="pageInput"
+                class="page-controls__input"
+                inputmode="numeric"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="1"
+              />
+              <span class="page-controls__total" id="pageTotalLabel">/ 1</span>
+            </form>
+            <button class="icon-button" id="nextPageBtn" type="button" aria-label="Next page">
+              <span aria-hidden="true">&#8250;</span>
+            </button>
           </div>
         </div>
 
-        <nav class="site-nav" aria-label="Primary navigation">
-          <a class="nav-link is-active" href="./index.html">Home</a>
-          <a class="nav-link" href="./reader.html">Reader</a>
-          <a class="nav-link" href="./study.html">Study</a>
-        </nav>
-
-        <div class="toolbar-group">
-          <button id="openPdfButton" class="button button-primary" type="button">Open PDF</button>
-          <button id="continueReadingButton" class="button button-ghost" type="button" disabled>
-            Continue
-          </button>
-          <div class="theme-switch" role="group" aria-label="Theme switcher">
-            <button class="theme-button is-active" data-theme-choice="light" type="button">Light</button>
-            <button class="theme-button" data-theme-choice="dark" type="button">Dark</button>
-            <button class="theme-button" data-theme-choice="sepia" type="button">Sepia</button>
+        <div class="topbar__actions">
+          <div class="status-pill" id="saveStatus">
+            <span class="status-pill__dot" aria-hidden="true"></span>
+            <span id="saveStatusText">Everything stays local</span>
           </div>
+          <button class="toolbar-button toolbar-button--ghost" id="commandPaletteBtn" type="button">
+            Quick Actions
+          </button>
+          <button class="toolbar-button toolbar-button--primary" id="openPdfBtn" type="button">
+            Open PDF
+          </button>
+          <button class="toolbar-button toolbar-button--ghost" id="toggleNotesManagerBtn" type="button">
+            All Notes
+          </button>
+          <button class="toolbar-button toolbar-button--ghost" id="openRevisionBtn" type="button">
+            Revision
+          </button>
+          <button class="toolbar-button toolbar-button--ghost" id="openGlossaryBtn" type="button">
+            Glossary
+          </button>
+          <button class="toolbar-button toolbar-button--ghost" id="openStatsBtn" type="button">
+            Stats
+          </button>
+          <button class="toolbar-button toolbar-button--ghost" id="openSettingsBtn" type="button">
+            Settings
+          </button>
         </div>
       </header>
 
-      <main class="home-layout">
-        <section class="hero-panel surface">
-          <div class="hero-copy">
-            <p class="eyebrow">Multi-page by design</p>
-            <h2>Start in a quiet home, read in a dedicated reader, review in a separate study space</h2>
-            <p class="hero-text">
-              The reader is now intentionally calmer. Open a PDF here, drop into the focused reading page,
-              and keep analysis, backup, glossary, and revision work on the separate study page.
-            </p>
-            <div class="button-row">
-              <button id="heroOpenPdfButton" class="button button-primary" type="button">Open a local PDF</button>
-              <a id="heroStudyLink" class="button button-ghost" href="./study.html">Open study space</a>
+      <main class="app-main">
+        <section class="landing-view view" id="landingView" aria-labelledby="landingTitle">
+          <section class="hero-card">
+            <div class="hero-card__content">
+              <p class="eyebrow">Quiet study, sharp recall</p>
+              <h1 id="landingTitle">Distraction-free workspace for deep study</h1>
+              <p class="hero-card__subtitle">
+                Read textbooks and articles in-browser, capture page-linked notes, and keep every
+                file inside your own browser storage.
+              </p>
+              <div class="hero-card__actions">
+                <button class="pill-button pill-button--primary" id="heroOpenPdfBtn" type="button">
+                  Open a PDF
+                </button>
+                <button class="pill-button pill-button--secondary" id="heroImportJsonBtn" type="button">
+                  Import backup
+                </button>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="hero-stack">
-            <article class="hero-metric">
-              <span class="metric-label">Today</span>
-              <strong id="todayPagesValue">0 pages</strong>
-              <span id="todayPagesCopy" class="subtle-copy">Your reading goal progress shows up here.</span>
+          <section class="upload-zone" id="dropZone" tabindex="0" aria-label="PDF drop zone">
+            <div class="upload-zone__icon" aria-hidden="true">⇪</div>
+            <h2>Drag and drop a PDF here</h2>
+            <p>Or click to browse your local files. Nothing is uploaded or synced.</p>
+            <button class="pill-button pill-button--muted" id="selectFileBtn" type="button">
+              Select file
+            </button>
+          </section>
+
+          <section class="landing-grid">
+            <article class="panel-card">
+              <div class="panel-card__header">
+                <div>
+                  <p class="eyebrow">Library</p>
+                  <h2>Recent documents</h2>
+                </div>
+                <button class="text-button" id="landingExportJsonBtn" type="button">Export JSON</button>
+              </div>
+              <div class="recent-documents" id="recentDocsList" aria-live="polite"></div>
             </article>
-            <article class="hero-metric">
-              <span class="metric-label">Streak</span>
-              <strong id="streakValue">0 days</strong>
-              <span id="streakCopy" class="subtle-copy">Consistency beats intensity.</span>
-            </article>
-            <article class="hero-metric">
-              <span class="metric-label">Notes</span>
-              <strong id="notesValue">0 saved</strong>
-              <span id="notesCopy" class="subtle-copy">Definitions, quotes, exam points, and questions.</span>
-            </article>
-          </div>
+
+            <aside class="panel-card helper-card" aria-labelledby="helperTitle">
+              <div class="panel-card__header">
+                <div>
+                  <p class="eyebrow">First run</p>
+                  <h2 id="helperTitle">How to get value fast</h2>
+                </div>
+              </div>
+              <ol class="helper-list">
+                <li>Open a local PDF. The document stays in your browser and reopens from the last page.</li>
+                <li>Add notes against the current page with tags for definitions, quotes, exam points, or questions.</li>
+                <li>Set a daily goal, run a focused session timer, then export your notes whenever you need them.</li>
+              </ol>
+              <div class="helper-shortcuts">
+                <div class="helper-shortcuts__row">
+                  <span>New note</span>
+                  <kbd>N</kbd>
+                </div>
+                <div class="helper-shortcuts__row">
+                  <span>Jump to page</span>
+                  <kbd>G</kbd>
+                </div>
+                <div class="helper-shortcuts__row">
+                  <span>Quick actions</span>
+                  <kbd>/</kbd>
+                </div>
+                <div class="helper-shortcuts__row">
+                  <span>Next / previous page</span>
+                  <div class="kbd-pair">
+                    <kbd>&larr;</kbd>
+                    <kbd>&rarr;</kbd>
+                  </div>
+                </div>
+              </div>
+              <div class="helper-actions">
+                <button class="pill-button pill-button--secondary" id="landingExportMarkdownBtn" type="button">
+                  Export Markdown
+                </button>
+                <button class="pill-button pill-button--secondary" id="landingImportJsonBtn" type="button">
+                  Restore backup
+                </button>
+              </div>
+              <p class="helper-card__privacy">
+                Files, notes, sessions, goals, and backups stay in this browser via IndexedDB.
+              </p>
+            </aside>
+          </section>
+
+          <section class="how-it-works" aria-labelledby="howItWorksTitle">
+            <div class="section-heading">
+              <p class="eyebrow">How it works</p>
+              <h2 id="howItWorksTitle">Three simple steps to better study</h2>
+              <p>Move from reading to recall without switching tools or giving up privacy.</p>
+            </div>
+            <div class="how-it-works__grid">
+              <article class="how-card">
+                <span class="how-card__step">1</span>
+                <h3>Open locally</h3>
+                <p>Import textbooks, journal articles, lecture slides, or books directly from your device.</p>
+              </article>
+              <article class="how-card">
+                <span class="how-card__step">2</span>
+                <h3>Annotate intelligently</h3>
+                <p>Capture notes tied to the current page, add quote snippets, and filter by study purpose.</p>
+              </article>
+              <article class="how-card">
+                <span class="how-card__step">3</span>
+                <h3>Revise with structure</h3>
+                <p>Turn notes into flashcards, browse a live glossary, and track daily reading momentum.</p>
+              </article>
+            </div>
+          </section>
+
+          <footer class="app-footer">
+            <p>
+              PDF Reading Companion is fully client-side. All files, notes, and settings stay local in
+              your browser unless you choose to export them.
+            </p>
+          </footer>
         </section>
 
-        <section class="home-grid">
-          <article class="home-card surface">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">First run</p>
-                <h3>How it works</h3>
+        <section class="workspace-view view is-hidden" id="workspaceView" aria-labelledby="documentTitle">
+          <div class="workspace">
+            <section class="viewer-panel">
+              <div class="viewer-panel__header">
+                <div>
+                  <p class="eyebrow" id="documentSectionLabel">Reader</p>
+                  <h1 id="documentTitle">Open a document to begin</h1>
+                  <p id="documentMetaText">
+                    PDF.js renders each page locally, then your progress and notes are saved into IndexedDB.
+                  </p>
+                </div>
+                <div class="viewer-panel__header-actions">
+                  <button class="pill-button pill-button--secondary" id="focusModeBtn" type="button">
+                    Focus mode
+                  </button>
+                  <button class="pill-button pill-button--secondary" id="exportMarkdownBtn" type="button">
+                    Export Markdown
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="how-list">
-              <p>1. Open a PDF from your device and the app caches it locally in this browser.</p>
-              <p>2. Read in the dedicated reader with only the core controls visible.</p>
-              <p>3. Handle notes review, export, glossary, revision mode, and backups in the study page.</p>
-            </div>
-          </article>
 
-          <article class="home-card surface">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Recent documents</p>
-                <h3>Resume fast</h3>
-              </div>
-            </div>
-            <div id="recentDocumentsList" class="recent-documents"></div>
-          </article>
+              <div class="viewer-surface">
+                <div class="viewer-surface__toolbar">
+                  <span class="viewer-chip" id="progressChip">Page 1 of 1</span>
+                  <span class="viewer-chip" id="goalChip">Today 0 / 20 pages</span>
+                  <div class="viewer-toolbar-spacer"></div>
+                  <button class="icon-button icon-button--soft" id="zoomOutBtn" type="button" aria-label="Zoom out">
+                    &minus;
+                  </button>
+                  <span class="zoom-label" id="zoomValue">100%</span>
+                  <button class="icon-button icon-button--soft" id="zoomInBtn" type="button" aria-label="Zoom in">
+                    +
+                  </button>
+                </div>
 
-          <article class="home-card surface">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Focused workflow</p>
-                <h3>Keep distraction out of the reader</h3>
+                <div class="viewer-frame" id="viewerFrame">
+                  <div class="viewer-placeholder" id="viewerPlaceholder">
+                    <h2>Reader ready</h2>
+                    <p>
+                      Open a stored document or import a new PDF. This view shows one page at a time for
+                      fast navigation and minimal distraction.
+                    </p>
+                    <button class="pill-button pill-button--primary" id="viewerOpenPdfBtn" type="button">
+                      Choose PDF
+                    </button>
+                  </div>
+                  <div class="viewer-canvas-wrap is-hidden" id="viewerCanvasWrap">
+                    <canvas id="pdfCanvas"></canvas>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="how-list">
-              <p>The reading page keeps only page controls, timer, progress, and a quick note drawer.</p>
-              <p>Everything heavier, like search, export, glossary, revision cards, and stats, lives elsewhere.</p>
-              <p>That split keeps the actual act of reading cleaner.</p>
-            </div>
-          </article>
+            </section>
 
-          <article class="home-card surface">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Local-only</p>
-                <h3>Private by default</h3>
+            <aside class="sidebar" aria-label="Study sidebar">
+              <div class="sidebar__sticky">
+                <section class="info-card session-card" aria-labelledby="sessionCardTitle">
+                  <div class="info-card__header">
+                    <div>
+                      <p class="eyebrow">Active session</p>
+                      <h2 id="sessionCardTitle">Focused reading timer</h2>
+                    </div>
+                    <div class="mono-badge" id="sessionTimerDisplay">00:00:00</div>
+                  </div>
+                  <div class="session-card__controls">
+                    <button class="pill-button pill-button--primary" id="startSessionBtn" type="button">Start</button>
+                    <button class="pill-button pill-button--secondary" id="pauseSessionBtn" type="button">Pause</button>
+                    <button class="pill-button pill-button--secondary" id="resetSessionBtn" type="button">Reset</button>
+                  </div>
+                  <label class="checkbox-row">
+                    <input id="attachSessionCheckbox" type="checkbox" checked />
+                    <span>Attach this session to the active document</span>
+                  </label>
+                </section>
+
+                <section class="info-card goal-card" aria-labelledby="goalCardTitle">
+                  <div class="info-card__header">
+                    <div>
+                      <p class="eyebrow">Daily goal</p>
+                      <h2 id="goalCardTitle">Pages per day</h2>
+                    </div>
+                    <span class="goal-card__percent" id="goalPercentLabel">0%</span>
+                  </div>
+                  <form class="goal-card__form" id="goalForm">
+                    <label class="sr-only" for="goalInput">Daily page goal</label>
+                    <input id="goalInput" class="goal-card__input" type="number" min="1" step="1" value="20" />
+                    <button class="pill-button pill-button--secondary" type="submit">Save goal</button>
+                  </form>
+                  <div class="progress-bar" aria-hidden="true">
+                    <div class="progress-bar__fill" id="goalProgressFill"></div>
+                  </div>
+                  <p class="goal-card__hint" id="goalStatusText">No pages logged yet for today.</p>
+                </section>
               </div>
-            </div>
-            <div class="how-list">
-              <p>PDFs, notes, sessions, goals, and backups all stay in the browser unless you export them.</p>
-              <p>No account, no upload, no backend, no cloud dependency.</p>
-            </div>
-          </article>
+
+              <section class="notes-panel info-card" aria-labelledby="notesPanelTitle">
+                <div class="info-card__header">
+                  <div>
+                    <p class="eyebrow">Current document</p>
+                    <h2 id="notesPanelTitle">Notes sidebar</h2>
+                  </div>
+                  <button class="text-button" id="sidebarExportBtn" type="button">Export</button>
+                </div>
+
+                <label class="search-field" for="noteSearchInput">
+                  <span class="sr-only">Search notes</span>
+                  <input
+                    id="noteSearchInput"
+                    class="search-field__input"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Search notes or quoted text"
+                  />
+                </label>
+
+                <div class="chip-row" id="tagFilterRow" aria-label="Note filters"></div>
+
+                <div class="notes-list" id="noteList" aria-live="polite"></div>
+              </section>
+
+              <form class="quick-note-card info-card" id="quickNoteForm">
+                <div class="quick-note-card__header">
+                  <div>
+                    <p class="eyebrow">New note</p>
+                    <h2>Page <span id="quickNotePageLabel">1</span></h2>
+                  </div>
+                  <button class="text-button" id="toggleSnippetBtn" type="button">Add snippet</button>
+                </div>
+                <label class="sr-only" for="quickNoteInput">Quick note</label>
+                <textarea
+                  id="quickNoteInput"
+                  class="quick-note-card__textarea"
+                  rows="4"
+                  placeholder="Capture a definition, quote, exam point, or question. Press Cmd/Ctrl+Enter to save."
+                ></textarea>
+                <label class="sr-only" for="selectedTextInput">Selected text or quote snippet</label>
+                <textarea
+                  id="selectedTextInput"
+                  class="quick-note-card__textarea quick-note-card__textarea--secondary is-hidden"
+                  rows="3"
+                  placeholder="Optional quoted text or highlighted snippet"
+                ></textarea>
+                <div class="chip-row chip-row--tight" id="quickNoteTypeGroup" aria-label="Choose note tag"></div>
+                <div class="quick-note-card__footer">
+                  <p>Autosaved immediately to your local browser storage.</p>
+                  <button class="pill-button pill-button--primary" type="submit">Save note</button>
+                </div>
+              </form>
+
+              <section class="info-card glossary-preview" aria-labelledby="glossaryPreviewTitle">
+                <div class="info-card__header">
+                  <div>
+                    <p class="eyebrow">Definitions</p>
+                    <h2 id="glossaryPreviewTitle">Glossary preview</h2>
+                  </div>
+                  <button class="text-button" id="openGlossaryPreviewBtn" type="button">Open full glossary</button>
+                </div>
+                <div class="glossary-preview__list" id="glossaryPreviewList"></div>
+              </section>
+
+              <footer class="workspace-footer-note">
+                All PDFs, notes, sessions, goals, and backups remain local in this browser.
+              </footer>
+            </aside>
+          </div>
         </section>
       </main>
 
-      <footer class="app-footer surface">
-        <p>All files, notes, sessions, and backups stay local in the browser.</p>
-        <p id="appStatus" class="status-text" aria-live="polite">Ready.</p>
-      </footer>
-    </div>
+      <div class="overlay is-hidden" id="notesManagerOverlay" aria-hidden="true">
+        <div class="overlay__backdrop" data-close-overlay="notesManagerOverlay"></div>
+        <section class="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="notesManagerTitle">
+          <header class="modal-panel__header">
+            <div>
+              <p class="eyebrow">Notes manager</p>
+              <h2 id="notesManagerTitle">Search, export, and curate everything</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-overlay="notesManagerOverlay" aria-label="Close notes manager">
+              &times;
+            </button>
+          </header>
+          <div class="notes-manager__controls">
+            <label class="search-field" for="notesManagerSearch">
+              <span class="sr-only">Search all notes</span>
+              <input
+                id="notesManagerSearch"
+                class="search-field__input"
+                type="search"
+                autocomplete="off"
+                placeholder="Search notes, tags, or content"
+              />
+            </label>
+            <select class="input-like" id="notesManagerDocumentFilter" aria-label="Filter by document"></select>
+            <select class="input-like" id="notesManagerTagFilter" aria-label="Filter by note type"></select>
+            <button class="pill-button pill-button--secondary" id="notesManagerExportMarkdownBtn" type="button">
+              Export MD
+            </button>
+            <button class="pill-button pill-button--primary" id="notesManagerExportJsonBtn" type="button">
+              Export JSON
+            </button>
+            <button class="pill-button pill-button--secondary" id="notesManagerImportBtn" type="button">
+              Import JSON
+            </button>
+          </div>
+          <div class="chip-row chip-row--static" id="notesManagerActiveFilters"></div>
+          <div class="notes-manager__list" id="notesManagerList" aria-live="polite"></div>
+        </section>
+      </div>
 
-    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+      <div class="overlay is-hidden" id="glossaryOverlay" aria-hidden="true">
+        <div class="overlay__backdrop" data-close-overlay="glossaryOverlay"></div>
+        <section class="modal-panel modal-panel--glossary" role="dialog" aria-modal="true" aria-labelledby="glossaryTitle">
+          <header class="modal-panel__header">
+            <div>
+              <p class="eyebrow">Glossary</p>
+              <h2 id="glossaryTitle">Definitions and source snippets</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-overlay="glossaryOverlay" aria-label="Close glossary">
+              &times;
+            </button>
+          </header>
+          <div class="glossary-layout">
+            <aside class="glossary-layout__sidebar">
+              <label class="search-field" for="glossarySearchInput">
+                <span class="sr-only">Search glossary terms</span>
+                <input
+                  id="glossarySearchInput"
+                  class="search-field__input"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Search terms"
+                />
+              </label>
+              <div class="glossary-layout__terms" id="glossaryTermList" aria-live="polite"></div>
+            </aside>
+            <section class="glossary-layout__detail" id="glossaryDetail" aria-live="polite"></section>
+          </div>
+        </section>
+      </div>
+
+      <div class="overlay is-hidden" id="revisionOverlay" aria-hidden="true">
+        <div class="overlay__backdrop overlay__backdrop--soft" data-close-overlay="revisionOverlay"></div>
+        <section class="revision-panel" role="dialog" aria-modal="true" aria-labelledby="revisionTitle">
+          <header class="revision-panel__header">
+            <div class="brand-line">
+              <img src="./assets/app-icon.svg" alt="" class="brand-line__icon" />
+              <span>PDF Reading Companion</span>
+            </div>
+            <div class="revision-panel__status">
+              <span id="revisionProgressLabel">Deck is ready</span>
+              <button class="icon-button" type="button" data-close-overlay="revisionOverlay" aria-label="Close revision mode">
+                &times;
+              </button>
+            </div>
+          </header>
+          <div class="revision-panel__body">
+            <article class="flashcard" id="flashcardCard" tabindex="0">
+              <p class="eyebrow" id="revisionDeckMeta">Revision mode</p>
+              <h2 id="revisionTitle">Flashcards generated from your notes</h2>
+              <div class="flashcard__media" aria-hidden="true"></div>
+              <p class="flashcard__hint" id="flashcardHint">Press Space or click to reveal the answer</p>
+              <div class="flashcard__answer is-hidden" id="flashcardAnswer"></div>
+            </article>
+            <div class="revision-rating" id="revisionRatingRow">
+              <button class="rating-button" id="gradeHardBtn" type="button" disabled>
+                <span>Hard</span>
+                <small>&lt; 1m</small>
+              </button>
+              <button class="rating-button rating-button--primary" id="gradeGoodBtn" type="button" disabled>
+                <span>Good</span>
+                <small>10m</small>
+              </button>
+              <button class="rating-button" id="gradeEasyBtn" type="button" disabled>
+                <span>Easy</span>
+                <small>4d</small>
+              </button>
+            </div>
+            <p class="revision-panel__footer" id="revisionFooterText">No flashcards due yet.</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="overlay is-hidden" id="statsOverlay" aria-hidden="true">
+        <div class="overlay__backdrop" data-close-overlay="statsOverlay"></div>
+        <section class="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+          <header class="modal-panel__header">
+            <div>
+              <p class="eyebrow">Study stats</p>
+              <h2 id="statsTitle">Momentum, streaks, and note activity</h2>
+            </div>
+            <button class="icon-button" type="button" data-close-overlay="statsOverlay" aria-label="Close stats">
+              &times;
+            </button>
+          </header>
+          <div class="stats-grid" id="statsGrid"></div>
+          <div class="stats-sections">
+            <section class="stats-section">
+              <h3>Note breakdown</h3>
+              <div id="statsNoteBreakdown"></div>
+            </section>
+            <section class="stats-section">
+              <h3>Recent sessions</h3>
+              <div id="statsSessionList"></div>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <div class="overlay is-hidden" id="settingsOverlay" aria-hidden="true">
+        <div class="overlay__backdrop" data-close-overlay="settingsOverlay"></div>
+        <section class="modal-panel modal-panel--medium" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+          <header class="modal-panel__header modal-panel__header--compact">
+            <div>
+              <h2 id="settingsTitle">Settings &amp; Preferences</h2>
+              <p>Customize your study environment.</p>
+            </div>
+            <button class="icon-button" type="button" data-close-overlay="settingsOverlay" aria-label="Close settings">
+              &times;
+            </button>
+          </header>
+          <form class="settings-form" id="settingsForm">
+            <section class="settings-section">
+              <h3>Appearance</h3>
+              <div class="theme-picker" id="themePicker" role="radiogroup" aria-label="Theme options"></div>
+            </section>
+
+            <section class="settings-section">
+              <h3>Accessibility &amp; Motion</h3>
+              <label class="toggle-row">
+                <div>
+                  <strong>Reduced motion</strong>
+                  <span>Minimize animations and transitions.</span>
+                </div>
+                <input id="reducedMotionToggle" type="checkbox" class="toggle-row__input" />
+              </label>
+              <label class="toggle-row">
+                <div>
+                  <strong>High contrast text</strong>
+                  <span>Increase contrast for easier reading.</span>
+                </div>
+                <input id="highContrastToggle" type="checkbox" class="toggle-row__input" />
+              </label>
+            </section>
+
+            <section class="settings-section">
+              <h3>Keyboard shortcuts</h3>
+              <div class="shortcut-list">
+                <div class="shortcut-row">
+                  <span>New note</span>
+                  <kbd>N</kbd>
+                </div>
+                <div class="shortcut-row">
+                  <span>Toggle focus mode</span>
+                  <kbd>F</kbd>
+                </div>
+                <div class="shortcut-row">
+                  <span>Quick actions</span>
+                  <div class="kbd-pair">
+                    <kbd>/</kbd>
+                    <kbd>Ctrl</kbd>
+                    <kbd>K</kbd>
+                  </div>
+                </div>
+                <div class="shortcut-row">
+                  <span>Next page</span>
+                  <kbd>&rarr;</kbd>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-section settings-section--privacy">
+              <h3>Data &amp; Privacy</h3>
+              <p>
+                Your notes, documents, sessions, and backups are stored locally in this browser. Nothing
+                is uploaded to a server.
+              </p>
+              <button class="pill-button pill-button--danger" id="clearLocalDataBtn" type="button">
+                Clear local data
+              </button>
+            </section>
+
+            <footer class="settings-form__footer">
+              <button class="pill-button pill-button--secondary" id="settingsCancelBtn" type="button">
+                Cancel
+              </button>
+              <button class="pill-button pill-button--primary" type="submit">Save preferences</button>
+            </footer>
+          </form>
+        </section>
+      </div>
+
+      <div class="overlay is-hidden overlay--command" id="commandPaletteOverlay" aria-hidden="true">
+        <div class="overlay__backdrop overlay__backdrop--soft" data-close-overlay="commandPaletteOverlay"></div>
+        <section class="command-palette" role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle">
+          <header class="command-palette__header">
+            <h2 id="commandPaletteTitle">Quick actions</h2>
+            <button class="icon-button" type="button" data-close-overlay="commandPaletteOverlay" aria-label="Close quick actions">
+              &times;
+            </button>
+          </header>
+          <label class="search-field command-palette__search" for="commandPaletteInput">
+            <span class="sr-only">Search commands</span>
+            <input
+              id="commandPaletteInput"
+              class="search-field__input"
+              type="search"
+              autocomplete="off"
+              placeholder="Type an action or a page number"
+            />
+          </label>
+          <div class="command-palette__list" id="commandPaletteList" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="overlay is-hidden" id="confirmOverlay" aria-hidden="true">
+        <div class="overlay__backdrop" data-close-overlay="confirmOverlay"></div>
+        <section class="modal-panel modal-panel--small" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+          <div class="confirm-dialog">
+            <div class="confirm-dialog__icon" aria-hidden="true">!</div>
+            <h2 id="confirmTitle">Confirm action</h2>
+            <p id="confirmMessage">Are you sure?</p>
+            <div class="confirm-dialog__actions">
+              <button class="pill-button pill-button--secondary" id="confirmCancelBtn" type="button">
+                Cancel
+              </button>
+              <button class="pill-button pill-button--danger" id="confirmAcceptBtn" type="button">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    </div>
 
     <script type="module" src="./scripts/app.js"></script>
   </body>

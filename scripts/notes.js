@@ -1,89 +1,193 @@
-export const NOTE_TYPES = ["definition", "highlight", "quote", "exam point", "question"];
+export const NOTE_TYPES = [
+  { id: "definition", label: "Definition", color: "#3b82f6" },
+  { id: "quote", label: "Quote", color: "#eab308" },
+  { id: "exam-point", label: "Exam Point", color: "#ef4444" },
+  { id: "question", label: "Question", color: "#a855f7" },
+];
 
-export const NOTE_TYPE_META = {
-  definition: {
-    label: "Definition",
-  },
-  highlight: {
-    label: "Highlight",
-  },
-  quote: {
-    label: "Quote",
-  },
-  "exam point": {
-    label: "Exam point",
-  },
-  question: {
-    label: "Question",
-  },
-};
+export const DEFAULT_NOTE_TYPE = "definition";
 
-export function createNoteRecord({
+export function getNoteType(typeId) {
+  return NOTE_TYPES.find((type) => type.id === typeId) || NOTE_TYPES[0];
+}
+
+export function createNote({
   documentId,
   page,
   type,
   content,
   selectedText = "",
-  term = "",
   color = "",
 }) {
   return {
     id: crypto.randomUUID(),
     documentId,
-    page: Math.max(1, Number(page) || 1),
-    type: NOTE_TYPES.includes(type) ? type : NOTE_TYPES[0],
+    page,
+    type,
     content: content.trim(),
-    createdAt: new Date().toISOString(),
     selectedText: selectedText.trim(),
-    term: term.trim(),
     color,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
 }
 
-export function sortNotes(left, right) {
-  if (left.page !== right.page) {
-    return left.page - right.page;
-  }
-
-  return new Date(right.createdAt) - new Date(left.createdAt);
+export function sortNotes(notes) {
+  return [...notes].sort((left, right) => right.createdAt - left.createdAt);
 }
 
-export function getNotePreview(text, length = 140) {
-  const trimmed = String(text ?? "").replace(/\s+/g, " ").trim();
+export function filterNotes(notes, { documentId = "all", type = "all", query = "" } = {}) {
+  const normalizedQuery = query.trim().toLowerCase();
 
-  if (trimmed.length <= length) {
-    return trimmed;
-  }
+  return sortNotes(notes).filter((note) => {
+    if (documentId !== "all" && note.documentId !== documentId) {
+      return false;
+    }
 
-  return `${trimmed.slice(0, Math.max(24, length - 1)).trim()}…`;
+    if (type !== "all" && note.type !== type) {
+      return false;
+    }
+
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    return [note.content, note.selectedText, String(note.page), note.type]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
 }
 
-export function filterNotes(notes, filters = {}) {
-  const search = String(filters.search ?? "").trim().toLowerCase();
-  const type = filters.type ?? "all";
+export function groupNotesByDocumentAndPage(notes, documentsById) {
+  const groups = new Map();
 
-  return [...notes]
-    .filter((note) => {
-      if (type !== "all" && note.type !== type) {
-        return false;
+  sortNotes(notes)
+    .slice()
+    .sort((left, right) => left.page - right.page || right.createdAt - left.createdAt)
+    .forEach((note) => {
+      const documentName = documentsById.get(note.documentId)?.name || "Untitled document";
+      const key = `${documentName}::${note.page}`;
+      if (!groups.has(key)) {
+        groups.set(key, { title: `Page ${note.page}`, subtitle: documentName, notes: [] });
       }
+      groups.get(key).notes.push(note);
+    });
 
-      if (!search) {
-        return true;
-      }
-
-      const haystack = [note.content, note.selectedText, note.term, note.type, String(note.page)]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(search);
-    })
-    .sort(sortNotes);
+  return [...groups.values()];
 }
 
 export function countNotesByType(notes) {
-  return NOTE_TYPES.reduce((counts, type) => {
-    counts[type] = notes.filter((note) => note.type === type).length;
-    return counts;
+  const counts = NOTE_TYPES.reduce((accumulator, type) => {
+    accumulator[type.id] = 0;
+    return accumulator;
   }, {});
+
+  notes.forEach((note) => {
+    counts[note.type] = (counts[note.type] || 0) + 1;
+  });
+
+  return counts;
+}
+
+export function formatRelativeDate(timestamp) {
+  const date = new Date(timestamp);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+export function extractDefinitionTerm(note) {
+  if (note.selectedText?.trim()) {
+    return note.selectedText.trim().replace(/^["“”]+|["“”]+$/g, "");
+  }
+
+  const firstLine = note.content.split(/\n+/)[0].trim();
+  if (!firstLine) {
+    return `Page ${note.page}`;
+  }
+
+  const shortMatch = firstLine.match(/^([A-Za-z0-9\- ]{2,40})(?:[:\-]|$)/);
+  if (shortMatch) {
+    return shortMatch[1].trim();
+  }
+
+  return firstLine.split(/\s+/).slice(0, 5).join(" ");
+}
+
+export function buildGlossaryEntries(notes, documentsById) {
+  return notes
+    .filter((note) => note.type === "definition")
+    .map((note) => ({
+      id: note.id,
+      term: extractDefinitionTerm(note),
+      definition: note.content,
+      page: note.page,
+      documentId: note.documentId,
+      documentName: documentsById.get(note.documentId)?.name || "Untitled document",
+      sourceSnippet: note.selectedText,
+      createdAt: note.createdAt,
+    }))
+    .sort((left, right) => left.term.localeCompare(right.term));
+}
+
+function escapeMarkdown(value) {
+  return String(value).replace(/[\\`*_{}[\]()#+-.!|>]/g, "\\$&");
+}
+
+export function buildMarkdownExport(documentsById, notes, { documentId = "all" } = {}) {
+  const filtered = filterNotes(notes, { documentId, type: "all", query: "" }).sort(
+    (left, right) => left.page - right.page || left.createdAt - right.createdAt,
+  );
+
+  if (!filtered.length) {
+    return "# PDF Reading Companion Notes\n\nNo notes available.\n";
+  }
+
+  const documentGroups = new Map();
+  filtered.forEach((note) => {
+    if (!documentGroups.has(note.documentId)) {
+      documentGroups.set(note.documentId, []);
+    }
+    documentGroups.get(note.documentId).push(note);
+  });
+
+  const lines = ["# PDF Reading Companion Notes", "", `Generated: ${new Date().toISOString()}`, ""];
+
+  documentGroups.forEach((documentNotes, currentDocumentId) => {
+    const documentRecord = documentsById.get(currentDocumentId);
+    lines.push(`## ${escapeMarkdown(documentRecord?.name || "Untitled document")}`);
+    lines.push("");
+
+    const pageGroups = new Map();
+    documentNotes.forEach((note) => {
+      if (!pageGroups.has(note.page)) {
+        pageGroups.set(note.page, []);
+      }
+      pageGroups.get(note.page).push(note);
+    });
+
+    [...pageGroups.entries()].forEach(([page, pageNotes]) => {
+      lines.push(`### Page ${page}`);
+      lines.push("");
+
+      pageNotes.forEach((note) => {
+        const type = getNoteType(note.type);
+        lines.push(`#### ${type.label}`);
+        lines.push("");
+        if (note.selectedText) {
+          lines.push(`> ${note.selectedText.split("\n").join("\n> ")}`);
+          lines.push("");
+        }
+        lines.push(note.content);
+        lines.push("");
+        lines.push(`_Saved ${formatRelativeDate(note.createdAt)}_`);
+        lines.push("");
+      });
+    });
+  });
+
+  return lines.join("\n");
 }

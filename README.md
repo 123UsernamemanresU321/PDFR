@@ -1,181 +1,149 @@
 # PDF Reading Companion
 
-PDF Reading Companion is a static, local-first web app for reading PDFs with as little distraction as possible. The product is split across dedicated pages so the actual reading surface stays quiet:
+PDF Reading Companion is a local-first study web app for reading PDFs, capturing page-linked notes, tracking progress, and revising from your notes as flashcards. It is designed for static hosting and runs entirely in the browser with no backend, no account system, and no cloud upload.
 
-- `Home`: open a PDF, resume recent work, see a light summary
-- `Reader`: focused PDF reading with only core controls, timer, progress, and a quick note drawer
-- `Study`: notes review, glossary, revision cards, stats, goals, and local backup tools
+## What it does
 
-Everything runs client-side. There is no backend, no login, no upload, and no cloud storage.
+- Opens local PDF files directly in-browser with PDF.js
+- Saves each document locally in IndexedDB so it can be reopened later
+- Restores last-read page per document
+- Lets you create notes tied to the current page
+- Supports note tags: `definition`, `quote`, `exam point`, `question`
+- Exports notes to Markdown
+- Exports and imports full local app data as JSON
+- Runs a focus session timer with local history
+- Tracks a daily reading goal in pages per day
+- Builds a glossary from definition notes automatically
+- Generates revision flashcards from notes
+- Includes theme modes: light, dark, sepia
+- Supports keyboard-first reading and note capture
+- Shows recent documents and study stats
 
-## Features
+## Feature overview
 
-- Open local PDFs in the browser with PDF.js
-- Cache PDFs locally in IndexedDB for quick reopening from Recent Documents
-- Save reading progress per document
-- Navigate with previous/next, jump to page, and zoom controls
-- Capture page-linked notes with tags:
-  - `definition`
-  - `quote`
-  - `exam point`
-  - `question`
-- Autosave note drafts locally while typing
-- Search and filter notes on the Study page
-- Export notes to Markdown
-- Export or import the full local app state as JSON
-- Track timed reading sessions
-- Set and monitor a pages-per-day goal
-- Build a glossary from definition notes
-- Review flashcards generated from notes
-- Track local stats such as pages read, streak days, sessions, and note counts
-- Switch between light, dark, and sepia themes
+### Phase 1
+
+- Figma-inspired landing view with onboarding, upload zone, and recent documents
+- PDF viewer with next/previous page, jump to page, and zoom controls
+- Per-document progress saving
+- Page-linked notes sidebar
+- Markdown export for the current document or full note set
+
+### Phase 2
+
+- Session timer with start, pause, reset, and document attachment
+- Daily reading goal with live progress
+- Note search and tag filtering
+- Theme switching and accessibility preferences
+- Full JSON backup import/export
+
+### Phase 3
+
+- Revision mode with flashcards derived from notes
+- Glossary panel for definition notes
+- Stats dashboard with totals, streak, and tag breakdown
+- Quick actions palette and keyboard shortcuts
+
+## Tech stack
+
+- Static HTML, CSS, and vanilla JavaScript modules
+- [PDF.js](https://mozilla.github.io/pdf.js/) loaded from CDN
+- IndexedDB for local persistence
+- No framework
+- No server
+- No authentication
 
 ## Project structure
 
 ```text
-/index.html
-/reader.html
-/study.html
-/styles/
-  base.css
-  layout.css
-  components.css
-  themes.css
-/scripts/
-  app.js
-  common.js
-  home-page.js
-  reader-page.js
-  study-page.js
-  pdf-viewer.js
-  storage.js
-  notes.js
-  sessions.js
-  goals.js
-  export.js
-  revision.js
-/assets/
-/README.md
+/
+├── assets/
+│   └── app-icon.svg
+├── scripts/
+│   ├── app.js
+│   ├── export.js
+│   ├── goals.js
+│   ├── notes.js
+│   ├── pdf-viewer.js
+│   ├── revision.js
+│   ├── sessions.js
+│   ├── storage.js
+│   └── ui.js
+├── styles/
+│   ├── base.css
+│   ├── components.css
+│   ├── layout.css
+│   └── themes.css
+├── index.html
+├── package.json
+└── README.md
 ```
 
 ## Local development
 
-This is a fully static app. Serve the project root with any simple web server.
+No build step is required.
 
-### Python
+### Option 1: Python
 
 ```bash
 python3 -m http.server 4173
 ```
 
-Then open [http://localhost:4173](http://localhost:4173).
+Then open `http://127.0.0.1:4173`.
 
-### Any other static server
+### Option 2: Any static file server
 
-VS Code Live Server, `npx serve`, or any equivalent static server works.
+Serve the repository root with any static server. The app uses browser-native ES modules, so it should be served over HTTP rather than opened directly as a `file://` page.
 
 ## GitHub Pages deployment
 
-1. Push the repository to GitHub.
-2. Open `Settings` > `Pages`.
+1. Push this repository to GitHub.
+2. In the repository, open `Settings` → `Pages`.
 3. Under `Build and deployment`, choose `Deploy from a branch`.
-4. Select your branch and the root folder.
-5. Save.
+4. Select the branch to publish and choose the repository root as the folder.
+5. Save the settings and wait for GitHub Pages to publish the site.
 
-There is no build step.
+There is no build command. GitHub Pages can deploy the files exactly as they are.
 
-## Storage model
+## Storage behavior
 
-The app uses IndexedDB with these stores:
+All data stays in the browser:
 
-- `documents`
-- `progress`
-- `notes`
-- `settings`
-- `sessions`
-- `goals`
-- `stats`
+- PDFs are stored locally as blobs in IndexedDB
+- Reading progress is stored per document
+- Notes, goals, flashcards, settings, and session history are stored locally
+- JSON backups include the locally stored documents and all app data
+- Nothing is uploaded unless you manually export a file yourself
 
-### Document records
-
-Each document record includes:
-
-- `id`
-- `name`
-- `size`
-- `lastOpened`
-- `fingerprint`
-- `totalPages`
-- cached PDF data for local reopening and JSON backup
-
-### Note records
-
-Each note record includes:
-
-- `id`
-- `documentId`
-- `page`
-- `type`
-- `content`
-- `createdAt`
-- optional `selectedText`
-
-## Privacy and backup behavior
-
-- PDFs and notes stay local in the browser.
-- Cached PDFs are stored only in IndexedDB on that browser profile.
-- JSON backup exports include cached PDFs, notes, progress, sessions, goals, stats, and settings.
-- Import merges records by ID into the current local browser state.
+If you clear browser site storage, the local library is removed. Use JSON export for backups.
 
 ## Keyboard shortcuts
 
-Reader page shortcuts:
-
 - `Left Arrow`: previous page
 - `Right Arrow`: next page
-- `N`: open the quick note drawer
-- `G`: focus the page jump field
-- `Escape`: close the note drawer
-- `Ctrl+E` or `Cmd+E`: export current document notes to Markdown
+- `G`: focus page jump input
+- `N`: focus quick note
+- `/` or `Ctrl+K`: open quick actions
+- `F`: toggle focus mode
+- `Space`: reveal revision answer
+- `1`, `2`, `3`: rate flashcards in revision mode
 
-## Product flow
+## Notes on design and implementation
 
-### Home
+- The interface follows the provided Figma direction for onboarding, reading workspace, notes manager, glossary, revision mode, and settings.
+- The UI is optimized for desktop and tablet first, with responsive fallback for smaller screens.
+- The app intentionally favors a robust local-first workflow over any external service integration.
 
-Use Home to:
+## Verification used during implementation
 
-- open a new local PDF
-- resume a recent document
-- see a light daily summary
-- keep the first-run explanation out of the reader
+- `node --check scripts/storage.js`
+- `node --check scripts/notes.js`
+- `node --check scripts/goals.js`
+- `node --check scripts/sessions.js`
+- `node --check scripts/revision.js`
+- `node --check scripts/export.js`
+- `node --check scripts/ui.js`
+- `node --check scripts/app.js`
+- `node --check scripts/pdf-viewer.js`
+- Local static server smoke test with `python3 -m http.server 4173`
 
-### Reader
-
-Use Reader for:
-
-- the PDF canvas
-- page controls
-- session timer
-- progress
-- quick note capture
-
-The reader intentionally excludes the heavier management features.
-
-### Study
-
-Use Study for:
-
-- note search and filtering
-- glossary view
-- revision flashcards
-- study stats
-- reading goal management
-- Markdown export
-- JSON backup import and export
-
-## Notes on constraints
-
-- The app is static and GitHub Pages compatible.
-- It uses vanilla JavaScript modules.
-- It does not require any server capability.
-- It is designed for desktop and tablet first, with a workable mobile fallback.

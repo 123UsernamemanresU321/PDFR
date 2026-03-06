@@ -1,187 +1,168 @@
-const TICK_INTERVAL_MS = 1000;
+export function formatDuration(durationMs) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
 
-function normalizeState(savedState) {
-  if (!savedState || typeof savedState !== "object") {
-    return {
-      elapsedMs: 0,
-      startedAt: null,
-      sessionStartedAt: null,
-      running: false,
-      documentId: null,
-    };
-  }
+function getDayKey(timestamp) {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
 
-  return {
-    elapsedMs: Math.max(0, Number(savedState.elapsedMs) || 0),
-    startedAt: savedState.startedAt ?? null,
-    sessionStartedAt: savedState.sessionStartedAt ?? null,
-    running: Boolean(savedState.running),
-    documentId: savedState.documentId ?? null,
+export function createSessionManager({ onTick, onChange } = {}) {
+  let tickTimer = null;
+  let state = {
+    id: null,
+    documentId: null,
+    attachToDocument: true,
+    isRunning: false,
+    createdAt: null,
+    startedAt: null,
+    elapsedMs: 0,
   };
-}
 
-export function formatDuration(milliseconds) {
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
-  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${hours}:${minutes}:${seconds}`;
-}
-
-export function createTimerController({ onTick = () => {}, onStateChange = () => {} } = {}) {
-  let intervalId = null;
-  let state = normalizeState(null);
-
-  function getElapsedNow() {
-    if (!state.running || !state.startedAt) {
-      return state.elapsedMs;
-    }
-
-    return state.elapsedMs + Math.max(0, Date.now() - new Date(state.startedAt).getTime());
-  }
-
-  function snapshot() {
+  function snapshot(now = Date.now()) {
+    const runningExtra = state.isRunning && state.startedAt ? now - state.startedAt : 0;
     return {
       ...state,
-      elapsedMs: getElapsedNow(),
+      elapsedMs: state.elapsedMs + runningExtra,
     };
   }
 
-  function stopInterval() {
-    if (intervalId) {
-      window.clearInterval(intervalId);
-      intervalId = null;
+  function emitTick() {
+    if (onTick) {
+      onTick(snapshot());
     }
   }
 
-  function startInterval() {
-    stopInterval();
-    intervalId = window.setInterval(() => {
-      onTick(snapshot());
-    }, TICK_INTERVAL_MS);
+  function emitChange() {
+    if (onChange) {
+      onChange(snapshot());
+    }
   }
 
-  function emit() {
-    onStateChange(snapshot());
+  function startTicker() {
+    clearInterval(tickTimer);
+    tickTimer = window.setInterval(emitTick, 1000);
+  }
+
+  function stopTicker() {
+    clearInterval(tickTimer);
+    tickTimer = null;
   }
 
   function start(documentId = null) {
-    if (state.running) {
+    if (state.isRunning) {
       return snapshot();
     }
 
-    const nowIso = new Date().toISOString();
-    state = {
-      ...state,
-      running: true,
-      startedAt: nowIso,
-      sessionStartedAt: state.sessionStartedAt ?? nowIso,
-      documentId: documentId ?? state.documentId ?? null,
-    };
-
-    startInterval();
-    emit();
+    const now = Date.now();
+    state.id = state.id || crypto.randomUUID();
+    state.createdAt = state.createdAt || now;
+    state.startedAt = now;
+    state.isRunning = true;
+    if (state.attachToDocument && documentId) {
+      state.documentId = documentId;
+    }
+    startTicker();
+    emitTick();
+    emitChange();
     return snapshot();
   }
 
   function pause() {
-    if (!state.running) {
+    if (!state.isRunning) {
       return snapshot();
     }
 
-    state = {
-      ...state,
-      elapsedMs: getElapsedNow(),
-      running: false,
-      startedAt: null,
-    };
-
-    stopInterval();
-    emit();
+    const now = Date.now();
+    state.elapsedMs += now - state.startedAt;
+    state.startedAt = null;
+    state.isRunning = false;
+    stopTicker();
+    emitTick();
+    emitChange();
     return snapshot();
   }
 
   function reset() {
-    const previous = snapshot();
-
-    if (state.running) {
-      pause();
-    }
-
-    let sessionRecord = null;
-
-    if (previous.elapsedMs >= TICK_INTERVAL_MS) {
-      sessionRecord = {
-        id: crypto.randomUUID(),
-        documentId: previous.documentId ?? null,
-        startedAt:
-          previous.sessionStartedAt ??
-          new Date(Date.now() - previous.elapsedMs).toISOString(),
-        endedAt: new Date().toISOString(),
-        durationMs: previous.elapsedMs,
-      };
-    }
-
+    const completed = snapshot();
+    stopTicker();
     state = {
-      elapsedMs: 0,
+      id: null,
+      documentId: null,
+      attachToDocument: state.attachToDocument,
+      isRunning: false,
+      createdAt: null,
       startedAt: null,
-      sessionStartedAt: null,
-      running: false,
-      documentId: previous.documentId ?? null,
+      elapsedMs: 0,
     };
+    emitTick();
+    emitChange();
 
-    stopInterval();
-    emit();
-    return sessionRecord;
-  }
-
-  function restore(savedState) {
-    state = normalizeState(savedState);
-
-    if (state.running && state.startedAt) {
-      startInterval();
-    } else {
-      stopInterval();
-    }
-
-    emit();
-    return snapshot();
-  }
-
-  function setDocumentId(documentId) {
-    state = {
-      ...state,
-      documentId: documentId ?? null,
-    };
-    emit();
-  }
-
-  function getSerializableState() {
-    const current = snapshot();
-
-    if (!current.running) {
-      return current;
+    if (!completed.id || completed.elapsedMs <= 0) {
+      return null;
     }
 
     return {
-      ...current,
-      elapsedMs: current.elapsedMs,
-      startedAt: new Date().toISOString(),
+      id: completed.id,
+      documentId: completed.documentId,
+      startedAt: completed.createdAt,
+      endedAt: Date.now(),
+      durationMs: completed.elapsedMs,
+      dayKey: getDayKey(completed.createdAt || Date.now()),
     };
   }
 
-  function destroy() {
-    stopInterval();
+  function setDocumentId(documentId) {
+    if (state.attachToDocument) {
+      state.documentId = documentId;
+      emitChange();
+    }
+  }
+
+  function setAttachToDocument(nextValue) {
+    state.attachToDocument = Boolean(nextValue);
+    emitChange();
+  }
+
+  function hydrate(savedState) {
+    if (!savedState) {
+      emitTick();
+      return;
+    }
+
+    state = {
+      ...state,
+      ...savedState,
+      attachToDocument: savedState.attachToDocument !== false,
+      isRunning: Boolean(savedState.isRunning),
+    };
+
+    if (state.isRunning && state.startedAt) {
+      startTicker();
+    }
+
+    emitTick();
+    emitChange();
+  }
+
+  function getPersistedState() {
+    return snapshot();
   }
 
   return {
     start,
     pause,
     reset,
-    restore,
+    hydrate,
     setDocumentId,
-    getState: snapshot,
-    getSerializableState,
-    destroy,
+    setAttachToDocument,
+    getPersistedState,
+    getSnapshot: snapshot,
   };
 }
