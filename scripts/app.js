@@ -1301,10 +1301,10 @@ async function initialize() {
     },
   });
 
+  bindEvents();
   await restoreSnapshot();
   sessionManager.hydrate(state.settings.activeSession);
   refs.sessionTimerDisplay.textContent = formatDuration(sessionManager.getPersistedState().elapsedMs || 0);
-  bindEvents();
 
   if (state.settings.lastDocumentId && state.documentsById.has(state.settings.lastDocumentId)) {
     await openStoredDocument(state.settings.lastDocumentId);
@@ -1317,6 +1317,11 @@ async function initialize() {
 
 if (typeof window !== "undefined") {
   window.addEventListener("DOMContentLoaded", () => {
-    void initialize();
+    void initialize().catch((error) => {
+      console.error("PDF Reading Companion failed to initialize", error);
+      if (refs?.toastRegion) {
+        showToast(refs.toastRegion, "Local storage failed to initialize. Refresh once after the update.");
+      }
+    });
   });
 }

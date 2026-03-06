@@ -1,5 +1,6 @@
 const DB_NAME = "pdf-reading-companion";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+const REQUIRED_STORES = ["documents", "progress", "notes", "settings", "sessions", "goals", "stats", "flashcards"];
 
 let dbPromise;
 
@@ -28,43 +29,81 @@ function createStore(database, name, options, indexes = []) {
   return store;
 }
 
-function openDatabase() {
-  if (dbPromise) {
-    return dbPromise;
-  }
+function ensureStores(database) {
+  createStore(database, "documents", { keyPath: "id" }, [
+    ["byFingerprint", "fingerprint", { unique: true }],
+    ["byLastOpened", "lastOpened", { unique: false }],
+  ]);
+  createStore(database, "progress", { keyPath: "documentId" }, [["byUpdatedAt", "updatedAt", { unique: false }]]);
+  createStore(database, "notes", { keyPath: "id" }, [
+    ["byDocumentId", "documentId", { unique: false }],
+    ["byCreatedAt", "createdAt", { unique: false }],
+    ["byType", "type", { unique: false }],
+  ]);
+  createStore(database, "settings", { keyPath: "key" });
+  createStore(database, "sessions", { keyPath: "id" }, [
+    ["byDocumentId", "documentId", { unique: false }],
+    ["byStartedAt", "startedAt", { unique: false }],
+    ["byDay", "dayKey", { unique: false }],
+  ]);
+  createStore(database, "goals", { keyPath: "id" });
+  createStore(database, "stats", { keyPath: "date" });
+  createStore(database, "flashcards", { keyPath: "id" }, [
+    ["byNoteId", "noteId", { unique: true }],
+    ["byDueAt", "dueAt", { unique: false }],
+  ]);
+}
 
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+function hasRequiredStores(database) {
+  return REQUIRED_STORES.every((storeName) => database.objectStoreNames.contains(storeName));
+}
+
+function openWithVersion(version) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, version);
 
     request.onupgradeneeded = () => {
-      const database = request.result;
-
-      createStore(database, "documents", { keyPath: "id" }, [
-        ["byFingerprint", "fingerprint", { unique: true }],
-        ["byLastOpened", "lastOpened", { unique: false }],
-      ]);
-      createStore(database, "progress", { keyPath: "documentId" }, [["byUpdatedAt", "updatedAt", { unique: false }]]);
-      createStore(database, "notes", { keyPath: "id" }, [
-        ["byDocumentId", "documentId", { unique: false }],
-        ["byCreatedAt", "createdAt", { unique: false }],
-        ["byType", "type", { unique: false }],
-      ]);
-      createStore(database, "settings", { keyPath: "key" });
-      createStore(database, "sessions", { keyPath: "id" }, [
-        ["byDocumentId", "documentId", { unique: false }],
-        ["byStartedAt", "startedAt", { unique: false }],
-        ["byDay", "dayKey", { unique: false }],
-      ]);
-      createStore(database, "goals", { keyPath: "id" });
-      createStore(database, "stats", { keyPath: "date" });
-      createStore(database, "flashcards", { keyPath: "id" }, [
-        ["byNoteId", "noteId", { unique: true }],
-        ["byDueAt", "dueAt", { unique: false }],
-      ]);
+      ensureStores(request.result);
     };
 
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Failed to open IndexedDB"));
+  });
+}
+
+function deleteDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error || new Error("Failed to delete IndexedDB database"));
+    request.onblocked = () => reject(new Error("IndexedDB delete was blocked"));
+  });
+}
+
+async function openDatabase() {
+  if (dbPromise) {
+    return dbPromise;
+  }
+
+  dbPromise = (async () => {
+    let database = await openWithVersion(DB_VERSION);
+
+    if (!hasRequiredStores(database)) {
+      const nextVersion = Math.max(DB_VERSION + 1, database.version + 1);
+      database.close();
+      database = await openWithVersion(nextVersion);
+    }
+
+    if (!hasRequiredStores(database)) {
+      database.close();
+      await deleteDatabase();
+      database = await openWithVersion(DB_VERSION);
+    }
+
+    return database;
+  })().catch((error) => {
+    dbPromise = undefined;
+    throw error;
   });
 
   return dbPromise;
