@@ -6,12 +6,12 @@
     <title>PDF Reading Companion • Reader</title>
     <meta
       name="description"
-      content="A focused 60/40 PDF reading workspace with a persistent notes, glossary, and session sidebar."
+      content="A structured reading workspace with a dominant PDF pane, sticky study sidebar, and quick note capture."
     >
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     >
     <link rel="stylesheet" href="./styles/base.css">
@@ -19,221 +19,198 @@
     <link rel="stylesheet" href="./styles/components.css">
     <link rel="stylesheet" href="./styles/themes.css">
   </head>
-  <body data-page="reader">
+  <body data-page="reader" class="reader-figma-page">
     <input id="pdfFileInput" type="file" accept="application/pdf" hidden>
 
-    <div class="site-shell site-shell-reader">
-      <header class="site-header reader-header surface">
-        <div class="brand brand-compact">
-          <div class="brand-mark" aria-hidden="true">PR</div>
-          <div>
-            <p class="eyebrow">Focused reading mode</p>
-            <h1>Reader</h1>
-          </div>
+    <div class="reader-shell">
+      <header class="reader-topbar">
+        <a class="reader-brand" href="./index.html" aria-label="Back to home">
+          <span class="reader-brand-mark" aria-hidden="true">PR</span>
+          <span class="reader-brand-copy">Reading Companion</span>
+        </a>
+
+        <div class="reader-page-nav" aria-label="Page navigation">
+          <button id="previousPageButton" class="reader-nav-button" type="button" disabled aria-label="Previous page">‹</button>
+          <label class="reader-page-pill">
+            <span class="sr-only">Current page</span>
+            <input id="pageNumberInput" type="number" min="1" step="1" value="1" inputmode="numeric" disabled>
+            <span class="reader-page-divider">/</span>
+            <span id="pageTotalLabel" class="reader-page-total">0</span>
+          </label>
+          <button id="nextPageButton" class="reader-nav-button" type="button" disabled aria-label="Next page">›</button>
         </div>
 
-        <nav class="site-nav" aria-label="Primary navigation">
-          <a class="nav-link" href="./index.html">Home</a>
-          <a class="nav-link is-active" href="./reader.html">Reader</a>
-          <a class="nav-link" href="./study.html">Study</a>
-        </nav>
-
-        <div class="toolbar-group">
-          <a id="studyLink" class="button button-ghost" href="./study.html">Study space</a>
-          <button id="openPdfButton" class="button button-primary" type="button">Open PDF</button>
-          <div class="theme-switch" role="group" aria-label="Theme switcher">
-            <button class="theme-button is-active" data-theme-choice="light" type="button">Light</button>
-            <button class="theme-button" data-theme-choice="dark" type="button">Dark</button>
-            <button class="theme-button" data-theme-choice="sepia" type="button">Sepia</button>
+        <div class="reader-topbar-actions">
+          <button id="openPdfButton" class="reader-ghost-action" type="button">Open PDF</button>
+          <div class="reader-save-state" aria-live="polite">
+            <span class="reader-save-dot" aria-hidden="true"></span>
+            <span id="saveStateLabel">Local-only workspace</span>
           </div>
+          <a id="studyLink" class="reader-primary-action" href="./study.html">Revision Mode</a>
+          <a class="reader-avatar" href="./study.html" aria-label="Open study space">RC</a>
         </div>
       </header>
 
-      <main class="reader-split">
-        <section class="reader-main-column surface">
-          <div class="reader-focus-header">
-            <div>
-              <span id="documentBadge" class="pill pill-muted">No document</span>
-              <h2 id="documentTitle">Open a local PDF and keep the page in front of you</h2>
-              <p id="documentMeta" class="subtle-copy">
-                The PDF holds the left side of the screen. Notes, glossary, and session tools stay on the right.
-              </p>
-            </div>
-            <button id="readerEmptyOpenButton" class="button button-primary" type="button">Open a PDF</button>
-          </div>
-
+      <main class="reader-figma-layout">
+        <section class="reader-pdf-pane" aria-label="PDF reading workspace">
           <section id="readerEmptyState" class="reader-empty-state">
-            <div class="empty-copy">
-              <p class="eyebrow">Quiet by default</p>
-              <h3>Read on the left, annotate on the right</h3>
+            <div class="reader-empty-card">
+              <p class="reader-kicker">Quiet by default</p>
+              <h1>Open a PDF and keep the reading surface clear.</h1>
               <p>
-                This page now uses a dedicated split layout so the PDF stays dominant while your notes,
-                glossary, and timer remain accessible without taking over the canvas.
+                This reader follows a fixed study layout: the document remains dominant,
+                while notes, filters, session timing, and quick capture stay contained in the right sidebar.
               </p>
+              <div class="button-row">
+                <button id="readerEmptyOpenButton" class="reader-primary-action" type="button">Open a PDF</button>
+                <a class="reader-ghost-action" href="./study.html">Open study space</a>
+              </div>
             </div>
 
-            <div id="readerHelperPanel" class="compact-helper">
-              <p class="panel-eyebrow">First run helper</p>
-              <p>Reader shortcuts: <kbd>←</kbd> <kbd>→</kbd> pages, <kbd>N</kbd> focus note form, <kbd>G</kbd> jump to page.</p>
+            <div id="readerHelperPanel" class="reader-empty-card reader-empty-helper">
+              <p class="reader-kicker">How it works</p>
+              <p>Use <kbd>←</kbd> and <kbd>→</kbd> to move between pages, <kbd>N</kbd> to jump to the quick note box, and <kbd>G</kbd> to jump to a page number.</p>
               <button id="dismissReaderHelperButton" class="action-link" type="button">Hide helper</button>
             </div>
 
-            <div>
-              <p class="panel-eyebrow">Recent documents</p>
+            <div class="reader-empty-card">
+              <div class="panel-heading">
+                <div>
+                  <p class="reader-kicker">Recent documents</p>
+                  <h2>Resume locally cached reading</h2>
+                </div>
+              </div>
               <div id="recentDocumentsList" class="recent-documents compact-list"></div>
             </div>
           </section>
 
-          <div id="viewerLoading" class="viewer-loading" hidden>Loading…</div>
-
           <div id="readerCanvasShell" class="reader-canvas-shell" hidden>
-            <div class="reader-page-toolbar">
-              <div class="toolbar-cluster">
-                <button id="previousPageButton" class="button button-ghost" type="button" disabled>Previous</button>
-                <label class="page-jump">
-                  <span>Page</span>
-                  <input id="pageNumberInput" type="number" min="1" step="1" value="1" inputmode="numeric" disabled>
-                </label>
-                <span id="pageTotalLabel" class="page-total">/ 0</span>
-                <button id="nextPageButton" class="button button-ghost" type="button" disabled>Next</button>
-              </div>
-
-              <div class="toolbar-cluster">
-                <button id="zoomOutButton" class="button button-ghost" type="button" disabled>-</button>
-                <button id="resetZoomButton" class="button button-ghost" type="button" disabled>Fit</button>
-                <button id="zoomInButton" class="button button-ghost" type="button" disabled>+</button>
-                <span id="zoomLabel" class="zoom-label">100%</span>
-              </div>
-            </div>
-
-            <div id="canvasViewport" class="canvas-viewport canvas-viewport-reader">
-              <div class="pdf-stage">
-                <canvas id="pdfCanvas" aria-label="Rendered PDF page"></canvas>
-                <div id="pageAnnotationOverlay" class="annotation-overlay" aria-live="polite"></div>
-              </div>
-            </div>
-
-            <div class="reader-bottombar">
-              <div>
-                <strong id="progressLabel">Progress</strong>
-                <p id="progressSubLabel" class="subtle-copy">Progress updates automatically as you read.</p>
-              </div>
-              <div class="reader-inline-metrics">
-                <span id="goalSummary" class="subtle-copy">0 / 12 pages today</span>
-                <div class="meter" aria-hidden="true">
-                  <span id="progressBar"></span>
+            <div class="reader-document-shell">
+              <div class="reader-document-frame">
+                <div class="reader-document-head">
+                  <span id="documentBadge" class="reader-document-kicker">Current document</span>
+                  <h1 id="documentTitle">Open a local PDF and keep the page in front of you</h1>
+                  <p id="documentMeta" class="subtle-copy">Progress, notes, and definitions stay attached to this PDF in the browser.</p>
                 </div>
+
+                <div id="viewerLoading" class="viewer-loading" hidden>Loading…</div>
+
+                <div id="canvasViewport" class="canvas-viewport canvas-viewport-reader">
+                  <div class="pdf-stage">
+                    <canvas id="pdfCanvas" aria-label="Rendered PDF page"></canvas>
+                    <div id="pageAnnotationOverlay" class="annotation-overlay" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="reader-zoom-dock surface" aria-label="Zoom controls">
+                <button id="zoomInButton" class="reader-zoom-button" type="button" disabled aria-label="Zoom in">+</button>
+                <button id="resetZoomButton" class="reader-zoom-button reader-zoom-button--label" type="button" disabled aria-label="Reset zoom">
+                  <span id="zoomLabel">100%</span>
+                </button>
+                <button id="zoomOutButton" class="reader-zoom-button" type="button" disabled aria-label="Zoom out">−</button>
               </div>
             </div>
           </div>
         </section>
 
-        <aside class="reader-sidebar surface" aria-label="Reader sidebar">
-          <section class="reader-sidebar-card">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Session</p>
-                <h3>Focused reading block</h3>
+        <aside class="reader-sidebar" aria-label="Reading sidebar">
+          <div class="reader-sidebar-stack">
+            <section class="reader-session-panel">
+              <div class="reader-session-row">
+                <div>
+                  <p class="reader-kicker">Active Session</p>
+                  <p id="sessionMeta" class="subtle-copy">Timer and progress stay linked to the current PDF.</p>
+                </div>
+                <div id="sessionTimerValue" class="reader-session-timer">00:00:00</div>
               </div>
-            </div>
-            <div class="timer-display" id="sessionTimerValue">00:00:00</div>
-            <p id="sessionMeta" class="subtle-copy">Sessions attach to the current PDF and stay local.</p>
-            <div class="button-row">
-              <button id="timerStartPauseButton" class="button button-primary" type="button">Start</button>
-              <button id="timerResetButton" class="button button-ghost" type="button">Reset</button>
-            </div>
-          </section>
 
-          <section class="reader-sidebar-card">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Document</p>
-                <h3>Current page markers</h3>
+              <div class="reader-goal-block">
+                <div class="reader-goal-row">
+                  <strong>Reading Goal Progress</strong>
+                  <span id="goalPercentLabel" class="reader-goal-percent">0%</span>
+                </div>
+                <div class="meter meter-reader" aria-hidden="true">
+                  <span id="progressBar"></span>
+                </div>
+                <div class="reader-goal-meta">
+                  <span id="goalSummary" class="subtle-copy">Set a PDF to see today's target.</span>
+                  <span id="progressLabel" class="subtle-copy">Page 0 of 0</span>
+                </div>
+                <p id="progressSubLabel" class="subtle-copy">The app restores your last page automatically for cached PDFs.</p>
+                <div class="button-row">
+                  <button id="timerStartPauseButton" class="button button-primary button-tight" type="button">Start</button>
+                  <button id="timerResetButton" class="button button-ghost button-tight" type="button">Reset</button>
+                </div>
               </div>
-            </div>
-            <p id="sidebarSummary" class="subtle-copy">Open a PDF to begin collecting notes and glossary entries.</p>
-            <div id="currentPageNotesList" class="notes-list"></div>
-          </section>
+            </section>
 
-          <nav class="side-tabs" aria-label="Reader sidebar sections">
-            <button class="tab-button is-active" data-reader-tab="annotations" type="button">Annotations</button>
-            <button class="tab-button" data-reader-tab="glossary" type="button">Glossary</button>
-          </nav>
-
-          <section id="annotationsPanel" class="reader-sidebar-card tab-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Annotations</p>
-                <h3>Notes and highlights</h3>
+            <section class="reader-notes-section">
+              <div class="reader-filter-row" role="group" aria-label="Filter notes">
+                <button class="reader-filter-chip is-active" data-note-filter="all" type="button">All Notes</button>
+                <button class="reader-filter-chip" data-note-filter="definition" type="button"><span class="reader-chip-dot reader-chip-dot--definition"></span>Definition</button>
+                <button class="reader-filter-chip" data-note-filter="highlight" type="button"><span class="reader-chip-dot reader-chip-dot--highlight"></span>Highlight</button>
+                <button class="reader-filter-chip" data-note-filter="quote" type="button"><span class="reader-chip-dot reader-chip-dot--quote"></span>Quote</button>
+                <button class="reader-filter-chip" data-note-filter="exam point" type="button"><span class="reader-chip-dot reader-chip-dot--exam-point"></span>Exam Point</button>
+                <button class="reader-filter-chip" data-note-filter="question" type="button"><span class="reader-chip-dot reader-chip-dot--question"></span>Question</button>
               </div>
-              <a id="annotationStudyLink" class="action-link" href="./study.html">Full study view</a>
-            </div>
 
-            <form id="annotationForm" class="note-form compact-form">
-              <div class="form-row">
-                <label>
-                  <span>Page</span>
-                  <input id="notePageInput" type="number" min="1" step="1" value="1" inputmode="numeric">
-                </label>
-                <label>
-                  <span>Type</span>
-                  <select id="noteTypeSelect">
-                    <option value="highlight">Highlight</option>
-                    <option value="quote">Quote</option>
-                    <option value="exam point">Exam point</option>
-                    <option value="question">Question</option>
-                  </select>
-                </label>
-              </div>
-              <label>
-                <span>Snippet</span>
-                <input id="noteSnippetInput" type="text" maxlength="240" placeholder="Word, phrase, or sentence from the page">
+              <p id="sidebarSummary" class="subtle-copy">Definition notes double as this PDF's linked glossary.</p>
+
+              <div id="documentNotesList" class="reader-note-list"></div>
+            </section>
+
+            <form id="quickNoteForm" class="reader-quick-note">
+              <input id="notePageInput" type="number" min="1" step="1" value="1" hidden>
+              <select id="noteTypeSelect" hidden>
+                <option value="definition">Definition</option>
+                <option value="highlight">Highlight</option>
+                <option value="quote">Quote</option>
+                <option value="exam point">Exam point</option>
+                <option value="question">Question</option>
+              </select>
+
+              <label id="noteTermWrap" class="reader-note-term-wrap" hidden>
+                <span class="sr-only">Glossary term</span>
+                <input id="noteTermInput" type="text" maxlength="180" placeholder="Glossary term">
               </label>
-              <label>
-                <span>Note</span>
-                <textarea id="noteContentInput" rows="5" placeholder="Capture why this matters."></textarea>
-              </label>
-              <div class="form-actions">
-                <button class="button button-primary" type="submit">Save annotation</button>
-                <span id="noteAutosaveHint" class="subtle-copy">Drafts save locally while you type.</span>
+
+              <div class="reader-quick-note-box">
+                <textarea
+                  id="noteContentInput"
+                  rows="2"
+                  placeholder="Type a quick note for this page. Press Enter to save."
+                ></textarea>
+                <button class="reader-send-button" type="submit" aria-label="Save note">➜</button>
+              </div>
+
+              <div class="reader-quick-note-meta">
+                <span id="noteAutosaveHint" class="subtle-copy">Linking to current page.</span>
+                <div class="reader-compose-types" role="group" aria-label="Choose note type">
+                  <button class="reader-compose-dot is-active" data-compose-type="definition" type="button" aria-label="Definition">
+                    <span class="reader-chip-dot reader-chip-dot--definition"></span>
+                  </button>
+                  <button class="reader-compose-dot" data-compose-type="highlight" type="button" aria-label="Highlight">
+                    <span class="reader-chip-dot reader-chip-dot--highlight"></span>
+                  </button>
+                  <button class="reader-compose-dot" data-compose-type="exam point" type="button" aria-label="Exam point">
+                    <span class="reader-chip-dot reader-chip-dot--exam-point"></span>
+                  </button>
+                  <button class="reader-compose-dot" data-compose-type="question" type="button" aria-label="Question">
+                    <span class="reader-chip-dot reader-chip-dot--question"></span>
+                  </button>
+                  <button class="reader-compose-dot" data-compose-type="quote" type="button" aria-label="Quote">
+                    <span class="reader-chip-dot reader-chip-dot--quote"></span>
+                  </button>
+                </div>
               </div>
             </form>
-          </section>
-
-          <section id="glossaryPanel" class="reader-sidebar-card tab-panel" hidden>
-            <div class="panel-heading">
-              <div>
-                <p class="panel-eyebrow">Linked glossary</p>
-                <h3>Unknown terms in this PDF</h3>
-              </div>
-            </div>
-
-            <form id="glossaryForm" class="note-form compact-form">
-              <label>
-                <span>Term</span>
-                <input id="glossaryTermInput" type="text" maxlength="180" placeholder="Key term or unfamiliar concept">
-              </label>
-              <label>
-                <span>Definition or explanation</span>
-                <textarea id="glossaryDefinitionInput" rows="4" placeholder="Write the meaning in your own words."></textarea>
-              </label>
-              <div class="form-actions">
-                <button class="button button-primary" type="submit">Add to glossary</button>
-                <span class="subtle-copy">Stored against this PDF and page.</span>
-              </div>
-            </form>
-
-            <label class="search-field">
-              <span class="sr-only">Search glossary</span>
-              <input id="glossarySearchInput" type="search" placeholder="Search glossary">
-            </label>
-            <div id="sidebarGlossaryList" class="glossary-list"></div>
-          </section>
+          </div>
         </aside>
       </main>
 
-      <footer class="app-footer surface">
-        <p>All PDFs, notes, highlights, glossary entries, timers, and progress stay local in this browser.</p>
+      <footer class="reader-footer">
+        <p>All PDFs, notes, glossary entries, highlights, sessions, and progress stay local in this browser.</p>
         <p id="appStatus" class="status-text" aria-live="polite">Ready.</p>
       </footer>
     </div>

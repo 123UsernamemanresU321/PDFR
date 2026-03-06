@@ -1,6 +1,5 @@
 import { createPdfViewer } from "./pdf-viewer.js";
 import { createNoteRecord, getNotePreview, NOTE_TYPE_META, sortNotes } from "./notes.js";
-import { buildGlossary } from "./revision.js";
 import { createTimerController, formatDuration } from "./sessions.js";
 import { calculateGoalProgress, dayStamp } from "./goals.js";
 import {
@@ -21,7 +20,6 @@ import {
   cachePdfFile,
   clamp,
   formatBytes,
-  formatTimestamp,
   getCachedDocumentBytes,
   getNotesForDocument,
   getProgressRecord,
@@ -29,7 +27,6 @@ import {
   loadAppModel,
   loadDocumentById,
   persistActiveDocumentId,
-  persistTheme,
   setReaderUrl,
   setStatus,
   showToast,
@@ -37,7 +34,8 @@ import {
   upsertRecord,
 } from "./common.js";
 
-const READER_TABS = ["annotations", "glossary"];
+const FILTER_TYPES = ["all", "definition", "highlight", "quote", "exam point", "question"];
+const COMPOSER_TYPES = ["definition", "highlight", "quote", "exam point", "question"];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -55,12 +53,178 @@ function toTypeClass(type) {
     .replace(/^-+|-+$/g, "");
 }
 
-function getAnnotationDraftKey(documentId) {
-  return `reader-annotation-draft:${documentId}`;
+function getDraftKey(documentId) {
+  return `reader-note-draft:${documentId}`;
 }
 
-function getGlossaryDraftKey(documentId) {
-  return `reader-glossary-draft:${documentId}`;
+function getNoteTerm(note) {
+  if (note.term?.trim()) {
+    return note.term.trim();
+  }
+
+  if (note.selectedText?.trim() && note.type === "definition") {
+    return note.selectedText.trim();
+  }
+
+  const firstLine = String(note.content ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  if (!firstLine) {
+    return "";
+  }
+
+  if (firstLine.includes(":")) {
+    return firstLine.split(":")[0].trim();
+  }
+
+  return firstLine.split(/\s+/).slice(0, 6).join(" ");
+}
+
+function getNoteExcerpt(note) {
+  if (note.selectedText?.trim() && note.type !== "definition") {
+    return note.selectedText.trim();
+  }
+
+  if (note.type !== "highlight" && note.type !== "quote") {
+    return "";
+  }
+
+  const lines = String(note.content ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length > 1) {
+    return lines[0];
+  }
+
+  return "";
+}
+
+function getNoteBody(note) {
+  const raw = String(note.content ?? "").trim();
+
+  if (!raw) {
+    return "";
+  }
+
+  if (note.type === "definition" && raw.includes(":")) {
+    return raw.split(":").slice(1).join(":").trim() || raw;
+  }
+
+  if ((note.type === "highlight" || note.type === "quote") && note.selectedText?.trim()) {
+    const normalizedRaw = raw.replace(/\s+/g, " ").trim();
+    const normalizedSelected = note.selectedText.trim().replace(/\s+/g, " ");
+
+    if (normalizedRaw === normalizedSelected) {
+      return "";
+    }
+  }
+
+  const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
+
+  if ((note.type === "highlight" || note.type === "quote") && lines.length > 1) {
+    return lines.slice(1).join(" ");
+  }
+
+  return raw;
+}
+
+function parseDefinitionContent(term, content) {
+  const safeTerm = term.trim();
+  const safeContent = content.trim();
+
+  if (safeTerm) {
+    return {
+      term: safeTerm,
+      selectedText: safeTerm,
+      content: safeContent,
+    };
+  }
+
+  if (safeContent.includes(":")) {
+    const [prefix, ...rest] = safeContent.split(":");
+
+    return {
+      term: prefix.trim(),
+      selectedText: prefix.trim(),
+      content: rest.join(":").trim(),
+    };
+  }
+
+  return {
+    term: "",
+    selectedText: "",
+    content: safeContent,
+  };
+}
+
+function parseQuickNote(type, term, rawContent) {
+  const content = rawContent.trim();
+
+  if (type === "definition") {
+    return parseDefinitionContent(term, content);
+  }
+
+  if (type === "highlight" || type === "quote") {
+    const lines = content.split("\n").map((line) => line.trim()).filter(Boolean);
+
+    if (lines.length > 1) {
+      return {
+        term: "",
+        selectedText: lines[0],
+        content: lines.slice(1).join(" "),
+      };
+    }
+
+    return {
+      term: "",
+      selectedText: content,
+      content,
+    };
+  }
+
+  return {
+    term: "",
+    selectedText: "",
+    content,
+  };
+}
+
+function buildSaveStateLabel(savedAt) {
+  if (!savedAt) {
+    return "Local-only workspace";
+  }
+
+  const elapsed = Date.now() - savedAt;
+
+  if (elapsed < 60_000) {
+    return "Saved just now";
+  }
+
+  return `Saved ${new Date(savedAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
+function sortSidebarNotes(notes, currentPage) {
+  return [...notes].sort((left, right) => {
+    const leftDistance = Math.abs(left.page - currentPage);
+    const rightDistance = Math.abs(right.page - currentPage);
+
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance;
+    }
+
+    if (left.page !== right.page) {
+      return right.page - left.page;
+    }
+
+    return new Date(right.createdAt) - new Date(left.createdAt);
+  });
 }
 
 function renderRecentDocuments(target, documents) {
@@ -79,7 +243,7 @@ function renderRecentDocuments(target, documents) {
             <strong>${escapeHtml(documentRecord.name)}</strong>
             <div class="recent-meta">
               <span class="subtle-copy">Page ${documentRecord.lastPage}</span>
-              <span class="subtle-copy">${documentRecord.noteCount} mark${documentRecord.noteCount === 1 ? "" : "s"}</span>
+              <span class="subtle-copy">${documentRecord.noteCount} note${documentRecord.noteCount === 1 ? "" : "s"}</span>
             </div>
           </button>
         </article>
@@ -88,68 +252,57 @@ function renderRecentDocuments(target, documents) {
     .join("");
 }
 
-function renderCurrentPageNotes(target, notes) {
+function renderSidebarNotes(target, notes, currentPage) {
   if (!notes.length) {
     target.innerHTML = `
-      <div class="revision-empty">No notes, highlights, or glossary items are pinned to this page yet.</div>
+      <div class="revision-empty">No saved notes match this view yet.</div>
     `;
     return;
   }
 
   target.innerHTML = notes
     .map((note) => {
-      const preview = note.content?.trim()
-        ? escapeHtml(note.content)
-        : `<span class="subtle-copy">Saved without extra note text.</span>`;
-      const snippet = note.selectedText?.trim()
-        ? `<div class="note-snippet">${escapeHtml(note.selectedText)}</div>`
-        : "";
-      const term = note.term?.trim()
-        ? `<strong class="annotation-card-term">${escapeHtml(note.term)}</strong>`
-        : "";
+      const typeLabel = NOTE_TYPE_META[note.type]?.label ?? note.type;
+      const term = getNoteTerm(note);
+      const excerpt = getNoteExcerpt(note);
+      const body = getNoteBody(note);
+      const pageBadge = `p. ${note.page}`;
+      const isCurrentPage = note.page === currentPage;
 
       return `
-        <article
-          id="sidebar-note-${note.id}"
-          class="annotation-card annotation-card--${toTypeClass(note.type)}"
-          data-note-card="${note.id}"
+        <button
+          type="button"
+          class="reader-note-card reader-note-card--${toTypeClass(note.type)} ${
+            isCurrentPage ? "is-current-page" : ""
+          }"
+          data-open-note="${note.id}"
+          data-note-page="${note.page}"
         >
-          <div class="note-meta">
-            <span class="pill">${escapeHtml(NOTE_TYPE_META[note.type]?.label ?? note.type)}</span>
-            <span class="subtle-copy">${escapeHtml(formatTimestamp(note.createdAt))}</span>
+          <div class="reader-note-card-head">
+            <div class="reader-note-type">
+              <span class="reader-chip-dot reader-chip-dot--${toTypeClass(note.type)}"></span>
+              <span>${escapeHtml(typeLabel)}</span>
+            </div>
+            <span class="reader-note-page-badge">${escapeHtml(pageBadge)}</span>
           </div>
-          ${term}
-          ${snippet}
-          <p>${preview}</p>
-          <div class="note-actions">
-            <button class="action-link" type="button" data-focus-note="${note.id}">Reveal on page</button>
-          </div>
-        </article>
+          ${
+            term
+              ? `<strong class="reader-note-title">${escapeHtml(term)}</strong>`
+              : ""
+          }
+          ${
+            excerpt
+              ? `<div class="reader-note-excerpt">${escapeHtml(getNotePreview(excerpt, 120))}</div>`
+              : ""
+          }
+          ${
+            body
+              ? `<p class="reader-note-body">${escapeHtml(getNotePreview(body, 220))}</p>`
+              : ""
+          }
+        </button>
       `;
     })
-    .join("");
-}
-
-function renderGlossaryList(target, entries) {
-  if (!entries.length) {
-    target.innerHTML = `
-      <div class="revision-empty">No glossary entries match this PDF yet.</div>
-    `;
-    return;
-  }
-
-  target.innerHTML = entries
-    .map(
-      (entry) => `
-        <article class="glossary-item glossary-entry-card">
-          <div class="note-meta">
-            <strong>${escapeHtml(entry.term)}</strong>
-            <button class="action-link" type="button" data-jump-page="${entry.page}">Page ${entry.page}</button>
-          </div>
-          <p>${escapeHtml(entry.definition)}</p>
-        </article>
-      `,
-    )
     .join("");
 }
 
@@ -164,9 +317,9 @@ function renderPageOverlay(target, notes) {
       const total = allNotes.length;
       const top = total === 1 ? 24 : 12 + (index * 72) / Math.max(total - 1, 1);
       const previewSource =
-        note.term?.trim() ||
+        getNoteTerm(note) ||
         note.selectedText?.trim() ||
-        note.content?.trim() ||
+        getNoteBody(note) ||
         NOTE_TYPE_META[note.type]?.label ||
         note.type;
       const preview = escapeHtml(getNotePreview(previewSource, note.type === "highlight" ? 72 : 48));
@@ -204,10 +357,8 @@ export async function init() {
     pdfInput: document.querySelector("#pdfFileInput"),
     openPdfButton: document.querySelector("#openPdfButton"),
     readerEmptyOpenButton: document.querySelector("#readerEmptyOpenButton"),
-    themeButtons: [...document.querySelectorAll("[data-theme-choice]")],
-    readerTabButtons: [...document.querySelectorAll("[data-reader-tab]")],
     studyLink: document.querySelector("#studyLink"),
-    annotationStudyLink: document.querySelector("#annotationStudyLink"),
+    saveStateLabel: document.querySelector("#saveStateLabel"),
     readerEmptyState: document.querySelector("#readerEmptyState"),
     readerCanvasShell: document.querySelector("#readerCanvasShell"),
     recentDocumentsList: document.querySelector("#recentDocumentsList"),
@@ -228,29 +379,26 @@ export async function init() {
     resetZoomButton: document.querySelector("#resetZoomButton"),
     zoomInButton: document.querySelector("#zoomInButton"),
     zoomLabel: document.querySelector("#zoomLabel"),
-    progressLabel: document.querySelector("#progressLabel"),
-    progressSubLabel: document.querySelector("#progressSubLabel"),
-    goalSummary: document.querySelector("#goalSummary"),
-    progressBar: document.querySelector("#progressBar"),
     sessionTimerValue: document.querySelector("#sessionTimerValue"),
     sessionMeta: document.querySelector("#sessionMeta"),
     timerStartPauseButton: document.querySelector("#timerStartPauseButton"),
     timerResetButton: document.querySelector("#timerResetButton"),
+    goalPercentLabel: document.querySelector("#goalPercentLabel"),
+    progressLabel: document.querySelector("#progressLabel"),
+    progressSubLabel: document.querySelector("#progressSubLabel"),
+    goalSummary: document.querySelector("#goalSummary"),
+    progressBar: document.querySelector("#progressBar"),
+    noteFilterButtons: [...document.querySelectorAll("[data-note-filter]")],
     sidebarSummary: document.querySelector("#sidebarSummary"),
-    currentPageNotesList: document.querySelector("#currentPageNotesList"),
-    annotationsPanel: document.querySelector("#annotationsPanel"),
-    annotationForm: document.querySelector("#annotationForm"),
+    documentNotesList: document.querySelector("#documentNotesList"),
+    quickNoteForm: document.querySelector("#quickNoteForm"),
     notePageInput: document.querySelector("#notePageInput"),
     noteTypeSelect: document.querySelector("#noteTypeSelect"),
-    noteSnippetInput: document.querySelector("#noteSnippetInput"),
+    noteTermWrap: document.querySelector("#noteTermWrap"),
+    noteTermInput: document.querySelector("#noteTermInput"),
     noteContentInput: document.querySelector("#noteContentInput"),
     noteAutosaveHint: document.querySelector("#noteAutosaveHint"),
-    glossaryPanel: document.querySelector("#glossaryPanel"),
-    glossaryForm: document.querySelector("#glossaryForm"),
-    glossaryTermInput: document.querySelector("#glossaryTermInput"),
-    glossaryDefinitionInput: document.querySelector("#glossaryDefinitionInput"),
-    glossarySearchInput: document.querySelector("#glossarySearchInput"),
-    sidebarGlossaryList: document.querySelector("#sidebarGlossaryList"),
+    composeTypeButtons: [...document.querySelectorAll("[data-compose-type]")],
     appStatus: document.querySelector("#appStatus"),
     toastRegion: document.querySelector("#toastRegion"),
   };
@@ -269,12 +417,14 @@ export async function init() {
     totalPages: 0,
     zoomPercent: 100,
     helperDismissed: false,
-    activeReaderTab: "annotations",
+    noteFilter: "all",
+    composerType: "definition",
     lastVisitedToken: null,
+    lastSavedAt: 0,
+    pendingFocusNoteId: null,
   };
 
-  let annotationDraftTimeout = 0;
-  let glossaryDraftTimeout = 0;
+  let noteDraftTimeout = 0;
   let focusPulseTimeout = 0;
 
   const viewer = createPdfViewer({
@@ -293,171 +443,169 @@ export async function init() {
     onStateChange: persistTimerAndRender,
   });
 
+  function markSaved(timestamp = Date.now()) {
+    state.lastSavedAt = timestamp;
+  }
+
   function currentDocumentNotes() {
     return state.currentDocument
       ? getNotesForDocument(state.notes, state.currentDocument.id).sort(sortNotes)
       : [];
   }
 
+  function filteredDocumentNotes() {
+    const notes = currentDocumentNotes();
+
+    if (state.noteFilter === "all") {
+      return sortSidebarNotes(notes, state.currentPage);
+    }
+
+    return sortSidebarNotes(
+      notes.filter((note) => note.type === state.noteFilter),
+      state.currentPage,
+    );
+  }
+
   function currentPageNotes() {
     return currentDocumentNotes().filter((note) => note.page === state.currentPage);
   }
 
-  function glossaryEntries() {
-    return buildGlossary(currentDocumentNotes(), elements.glossarySearchInput.value);
-  }
+  function setComposerType(type) {
+    state.composerType = COMPOSER_TYPES.includes(type) ? type : "definition";
+    elements.noteTypeSelect.value = state.composerType;
+    const hintText = elements.noteAutosaveHint.textContent.toLowerCase();
+    const preserveHint =
+      hintText.includes("saved") || hintText.includes("restored") || hintText.includes("saving");
 
-  function setReaderTab(tabName) {
-    state.activeReaderTab = READER_TABS.includes(tabName) ? tabName : "annotations";
-
-    for (const button of elements.readerTabButtons) {
-      button.classList.toggle("is-active", button.dataset.readerTab === state.activeReaderTab);
+    for (const button of elements.composeTypeButtons) {
+      button.classList.toggle("is-active", button.dataset.composeType === state.composerType);
     }
 
-    elements.annotationsPanel.hidden = state.activeReaderTab !== "annotations";
-    elements.glossaryPanel.hidden = state.activeReaderTab !== "glossary";
+    const isDefinition = state.composerType === "definition";
+    elements.noteTermWrap.hidden = !isDefinition;
+
+    if (isDefinition) {
+      elements.noteContentInput.placeholder = "Write the definition or explanation for this page.";
+      if (!preserveHint) {
+        elements.noteAutosaveHint.textContent = "Definition notes become this PDF's glossary.";
+      }
+    } else if (!preserveHint) {
+      elements.noteContentInput.placeholder = `Type a quick ${state.composerType} note for this page. Press Enter to save.`;
+      elements.noteAutosaveHint.textContent = "Linking to current page.";
+    }
+  }
+
+  function setNoteFilter(type) {
+    state.noteFilter = FILTER_TYPES.includes(type) ? type : "all";
+
+    for (const button of elements.noteFilterButtons) {
+      button.classList.toggle("is-active", button.dataset.noteFilter === state.noteFilter);
+    }
   }
 
   function setFormAvailability(hasDocument) {
-    const annotationControls = [
-      elements.notePageInput,
-      elements.noteTypeSelect,
-      elements.noteSnippetInput,
+    const controls = [
+      elements.previousPageButton,
+      elements.nextPageButton,
+      elements.pageNumberInput,
+      elements.zoomOutButton,
+      elements.resetZoomButton,
+      elements.zoomInButton,
+      elements.timerStartPauseButton,
+      elements.timerResetButton,
       elements.noteContentInput,
-      ...elements.annotationForm.querySelectorAll("button"),
-    ];
-    const glossaryControls = [
-      elements.glossaryTermInput,
-      elements.glossaryDefinitionInput,
-      elements.glossarySearchInput,
-      ...elements.glossaryForm.querySelectorAll("button"),
+      elements.noteTermInput,
+      ...elements.composeTypeButtons,
+      ...elements.noteFilterButtons,
+      ...elements.quickNoteForm.querySelectorAll("button"),
     ];
 
-    for (const control of [...annotationControls, ...glossaryControls]) {
+    for (const control of controls) {
       control.disabled = !hasDocument;
     }
   }
 
-  async function persistAnnotationDraftNow() {
-    window.clearTimeout(annotationDraftTimeout);
+  async function persistDraftNow() {
+    window.clearTimeout(noteDraftTimeout);
 
     if (!state.currentDocument) {
       return;
     }
 
     const payload = {
+      type: state.composerType,
       page: clamp(Number(elements.notePageInput.value) || state.currentPage, 1, Math.max(1, state.totalPages)),
-      type: elements.noteTypeSelect.value,
-      selectedText: elements.noteSnippetInput.value.trim(),
+      term: elements.noteTermInput.value.trim(),
       content: elements.noteContentInput.value.trim(),
     };
-    const draftKey = getAnnotationDraftKey(state.currentDocument.id);
 
-    if (!payload.selectedText && !payload.content) {
-      await deleteSetting(draftKey);
-      elements.noteAutosaveHint.textContent = "Drafts save locally while you type.";
+    if (!payload.term && !payload.content) {
+      await deleteSetting(getDraftKey(state.currentDocument.id));
+
+      if (state.composerType === "definition") {
+        elements.noteAutosaveHint.textContent = "Definition notes become this PDF's glossary.";
+      } else {
+        elements.noteAutosaveHint.textContent = "Linking to current page.";
+      }
       return;
     }
 
-    await saveSetting(draftKey, payload);
-    elements.noteAutosaveHint.textContent = "Annotation draft saved locally.";
+    await saveSetting(getDraftKey(state.currentDocument.id), payload);
+    elements.noteAutosaveHint.textContent = "Draft saved locally.";
+    markSaved();
   }
 
-  function scheduleAnnotationDraftSave() {
+  function scheduleDraftSave() {
     if (!state.currentDocument) {
       return;
     }
 
     elements.noteAutosaveHint.textContent = "Saving draft locally…";
-    window.clearTimeout(annotationDraftTimeout);
-    annotationDraftTimeout = window.setTimeout(() => {
-      void persistAnnotationDraftNow();
+    window.clearTimeout(noteDraftTimeout);
+    noteDraftTimeout = window.setTimeout(() => {
+      void persistDraftNow();
     }, 240);
   }
 
-  async function persistGlossaryDraftNow() {
-    window.clearTimeout(glossaryDraftTimeout);
-
-    if (!state.currentDocument) {
-      return;
-    }
-
-    const payload = {
-      term: elements.glossaryTermInput.value.trim(),
-      definition: elements.glossaryDefinitionInput.value.trim(),
-    };
-    const draftKey = getGlossaryDraftKey(state.currentDocument.id);
-
-    if (!payload.term && !payload.definition) {
-      await deleteSetting(draftKey);
-      return;
-    }
-
-    await saveSetting(draftKey, payload);
-  }
-
-  function scheduleGlossaryDraftSave() {
-    if (!state.currentDocument) {
-      return;
-    }
-
-    window.clearTimeout(glossaryDraftTimeout);
-    glossaryDraftTimeout = window.setTimeout(() => {
-      void persistGlossaryDraftNow();
-    }, 240);
-  }
-
-  async function restoreDrafts() {
-    const defaultAnnotationType = "highlight";
-
+  async function restoreDraft() {
     elements.notePageInput.value = String(clamp(state.currentPage || 1, 1, Math.max(1, state.totalPages)));
-    elements.noteTypeSelect.value = defaultAnnotationType;
-    elements.noteSnippetInput.value = "";
+    elements.noteTermInput.value = "";
     elements.noteContentInput.value = "";
-    elements.noteAutosaveHint.textContent = "Drafts save locally while you type.";
-    elements.glossaryTermInput.value = "";
-    elements.glossaryDefinitionInput.value = "";
+    setComposerType("definition");
 
     if (!state.currentDocument) {
       return;
     }
 
-    const [annotationDraftRecord, glossaryDraftRecord] = await Promise.all([
-      getSetting(getAnnotationDraftKey(state.currentDocument.id)),
-      getSetting(getGlossaryDraftKey(state.currentDocument.id)),
-    ]);
+    const draftRecord = await getSetting(getDraftKey(state.currentDocument.id));
+    const draft = draftRecord?.value;
 
-    const annotationDraft = annotationDraftRecord?.value;
-    const glossaryDraft = glossaryDraftRecord?.value;
-    const availableTypes = [...elements.noteTypeSelect.options].map((option) => option.value);
-
-    if (annotationDraft) {
-      elements.notePageInput.value = String(
-        clamp(Number(annotationDraft.page) || state.currentPage, 1, Math.max(1, state.totalPages)),
-      );
-      elements.noteTypeSelect.value = availableTypes.includes(annotationDraft.type)
-        ? annotationDraft.type
-        : defaultAnnotationType;
-      elements.noteSnippetInput.value = annotationDraft.selectedText ?? "";
-      elements.noteContentInput.value = annotationDraft.content ?? "";
-      elements.noteAutosaveHint.textContent = "Annotation draft restored locally.";
+    if (!draft) {
+      return;
     }
 
-    if (glossaryDraft) {
-      elements.glossaryTermInput.value = glossaryDraft.term ?? "";
-      elements.glossaryDefinitionInput.value = glossaryDraft.definition ?? "";
-    }
+    setComposerType(draft.type || "definition");
+    elements.notePageInput.value = String(
+      clamp(Number(draft.page) || state.currentPage, 1, Math.max(1, state.totalPages)),
+    );
+    elements.noteTermInput.value = draft.term ?? "";
+    elements.noteContentInput.value = draft.content ?? "";
+    elements.noteAutosaveHint.textContent = "Draft restored locally.";
   }
 
   function pulseNote(noteId) {
     window.clearTimeout(focusPulseTimeout);
 
-    for (const target of document.querySelectorAll(".is-active, .is-emphasized")) {
-      target.classList.remove("is-active", "is-emphasized");
+    for (const target of elements.pageAnnotationOverlay.querySelectorAll(".is-active")) {
+      target.classList.remove("is-active");
+    }
+
+    for (const target of elements.documentNotesList.querySelectorAll(".is-emphasized")) {
+      target.classList.remove("is-emphasized");
     }
 
     const overlayMarker = elements.pageAnnotationOverlay.querySelector(`[data-focus-note="${noteId}"]`);
-    const sidebarCard = elements.currentPageNotesList.querySelector(`[data-note-card="${noteId}"]`);
+    const sidebarCard = elements.documentNotesList.querySelector(`[data-open-note="${noteId}"]`);
 
     overlayMarker?.classList.add("is-active");
     sidebarCard?.classList.add("is-emphasized");
@@ -466,91 +614,98 @@ export async function init() {
     focusPulseTimeout = window.setTimeout(() => {
       overlayMarker?.classList.remove("is-active");
       sidebarCard?.classList.remove("is-emphasized");
-    }, 2400);
+    }, 2200);
   }
 
   function render() {
     const hasDocument = Boolean(state.currentDocument);
     const notesForDocument = currentDocumentNotes();
+    const visibleNotes = filteredDocumentNotes();
     const pageNotes = currentPageNotes();
-    const glossary = glossaryEntries();
     const progressRecord = hasDocument ? getProgressRecord(state.progressRecords, state.currentDocument.id) : null;
     const pagesToday = state.pageVisits.filter((record) => record.date === dayStamp()).length;
-    const goalProgress = calculateGoalProgress(state.goal.targetPages, pagesToday);
+    const goalProgress = calculateGoalProgress(state.goal?.targetPages ?? 12, pagesToday);
     const recentDocuments = buildRecentDocumentSummaries(
       state.documents,
       state.progressRecords,
       state.notes,
       6,
     );
-    const documentGlossaryCount = notesForDocument.filter((note) => note.type === "definition").length;
-    const pageGlossaryCount = pageNotes.filter((note) => note.type === "definition").length;
+    const definitionsCount = notesForDocument.filter((note) => note.type === "definition").length;
+    const saveStateLabel = buildSaveStateLabel(state.lastSavedAt);
     const progressPercent = hasDocument && state.totalPages
       ? Math.round((state.currentPage / state.totalPages) * 100)
       : 0;
+    const goalPercent = goalProgress.percent;
     const timerState = timer.getState();
 
-    applyTheme(state.theme, elements.themeButtons);
-    setReaderTab(state.activeReaderTab);
+    applyTheme(state.theme);
     setFormAvailability(hasDocument);
+    setNoteFilter(state.noteFilter);
+    setComposerType(state.composerType);
     renderRecentDocuments(elements.recentDocumentsList, recentDocuments);
-    renderCurrentPageNotes(elements.currentPageNotesList, hasDocument ? pageNotes : []);
-    renderGlossaryList(elements.sidebarGlossaryList, hasDocument ? glossary : []);
+    renderSidebarNotes(elements.documentNotesList, hasDocument ? visibleNotes : [], state.currentPage);
     renderPageOverlay(elements.pageAnnotationOverlay, hasDocument ? pageNotes : []);
 
     elements.readerEmptyState.hidden = hasDocument;
     elements.readerCanvasShell.hidden = !hasDocument;
     elements.readerHelperPanel.hidden = state.helperDismissed;
-    elements.pageNumberInput.disabled = !hasDocument;
-    elements.pageNumberInput.max = String(Math.max(1, state.totalPages || 1));
-    elements.pageTotalLabel.textContent = `/ ${state.totalPages || 0}`;
+    elements.saveStateLabel.textContent = saveStateLabel;
     elements.pageNumberInput.value = String(state.currentPage || 1);
-    elements.previousPageButton.disabled = !hasDocument || state.currentPage <= 1;
-    elements.nextPageButton.disabled = !hasDocument || state.currentPage >= state.totalPages;
-    elements.zoomOutButton.disabled = !hasDocument;
-    elements.zoomInButton.disabled = !hasDocument;
-    elements.resetZoomButton.disabled = !hasDocument;
-    elements.notePageInput.max = String(Math.max(1, state.totalPages || 1));
+    elements.pageNumberInput.max = String(Math.max(1, state.totalPages || 1));
+    elements.pageTotalLabel.textContent = String(state.totalPages || 0);
     elements.zoomLabel.textContent = `${state.zoomPercent}%`;
     elements.studyLink.href = studyHref(state.currentDocument?.id ?? state.activeDocumentId);
-    elements.annotationStudyLink.href = studyHref(state.currentDocument?.id ?? state.activeDocumentId);
-    elements.progressBar.style.width = `${progressPercent}%`;
-    elements.goalSummary.textContent = `${goalProgress.pagesToday} / ${goalProgress.target} pages today`;
+    elements.notePageInput.value = String(state.currentPage || 1);
     elements.sessionTimerValue.textContent = formatDuration(timerState.elapsedMs);
     elements.timerStartPauseButton.textContent = timerState.running ? "Pause" : "Start";
-    elements.readerEmptyOpenButton.textContent = hasDocument ? "Replace PDF" : "Open a PDF";
+    elements.progressBar.style.width = `${goalPercent}%`;
+    elements.goalPercentLabel.textContent = `${goalPercent}%`;
 
     if (!hasDocument) {
-      elements.documentBadge.textContent = "No document";
-      elements.documentTitle.textContent = "Open a local PDF and keep the page in front of you";
+      elements.documentBadge.textContent = "Current document";
+      elements.documentTitle.textContent = "Open a local PDF and keep the reading surface clear.";
       elements.documentMeta.textContent =
-        "The PDF stays dominant on the left. Notes, glossary, and sessions stay tucked into the right sidebar.";
-      elements.progressLabel.textContent = "Progress appears once a PDF is open";
+        "The reader restores progress automatically and keeps notes attached to each PDF in the browser.";
+      elements.goalSummary.textContent = "Set a PDF to see today's target.";
+      elements.progressLabel.textContent = "Page 0 of 0";
       elements.progressSubLabel.textContent = "The app restores your last page automatically for cached PDFs.";
-      elements.sidebarSummary.textContent = "Open a PDF to begin collecting notes and glossary entries.";
-      elements.sessionMeta.textContent = "Sessions attach to the current PDF and stay local.";
+      elements.sidebarSummary.textContent = "Definition notes double as this PDF's linked glossary.";
+      elements.sessionMeta.textContent = "Timer and progress stay linked to the current PDF.";
+      elements.previousPageButton.disabled = true;
+      elements.nextPageButton.disabled = true;
       return;
     }
 
-    elements.documentBadge.textContent = "Reading";
-    elements.documentTitle.textContent = state.currentDocument.name;
+    elements.previousPageButton.disabled = state.currentPage <= 1;
+    elements.nextPageButton.disabled = state.currentPage >= state.totalPages;
+    elements.documentBadge.textContent = `Page ${state.currentPage}`;
+    elements.documentTitle.textContent = state.currentDocument.name.replace(/\.pdf$/i, "");
     elements.documentMeta.textContent = `${formatBytes(state.currentDocument.size)} • ${
       state.totalPages
-    } pages • ${notesForDocument.length} saved mark${notesForDocument.length === 1 ? "" : "s"} • ${
-      documentGlossaryCount
-    } glossary term${documentGlossaryCount === 1 ? "" : "s"}`;
+    } pages • ${notesForDocument.length} note${notesForDocument.length === 1 ? "" : "s"} • ${
+      definitionsCount
+    } glossary item${definitionsCount === 1 ? "" : "s"}`;
+    elements.sessionMeta.textContent = timerState.running
+      ? `Session running on ${state.currentDocument.name}. Reset saves this reading block locally.`
+      : `Linked to ${state.currentDocument.name}. Timer resets save completed reading blocks locally.`;
+    elements.goalSummary.textContent = goalProgress.copy;
     elements.progressLabel.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
     elements.progressSubLabel.textContent = progressRecord
       ? `Resume is saved locally. Last recorded page: ${progressRecord.currentPage}.`
       : "Progress is tracked automatically while you read.";
-    elements.sessionMeta.textContent = timerState.running
-      ? `Timer is running on ${state.currentDocument.name}. Reset saves this session locally.`
-      : `Attached to ${state.currentDocument.name}. Reset saves this reading block as a session.`;
-    elements.sidebarSummary.textContent = pageNotes.length
-      ? `Page ${state.currentPage} has ${pageNotes.length} saved mark${
-          pageNotes.length === 1 ? "" : "s"
-        }, including ${pageGlossaryCount} glossary term${pageGlossaryCount === 1 ? "" : "s"}.`
-      : `Page ${state.currentPage} is clear. Add a highlight, note, or glossary term without leaving the reader.`;
+
+    if (state.noteFilter === "definition") {
+      elements.sidebarSummary.textContent = `${
+        visibleNotes.length
+      } glossary entr${visibleNotes.length === 1 ? "y" : "ies"} for this PDF.`;
+    } else {
+      elements.sidebarSummary.textContent = `${
+        visibleNotes.length
+      } visible note${visibleNotes.length === 1 ? "" : "s"} for this PDF. ${
+        pageNotes.length
+      } appear on the current page.`;
+    }
   }
 
   async function openCachedDocument(documentId, pageOverride = null, maybeDocumentRecord = null, maybeBytes = null) {
@@ -603,8 +758,9 @@ export async function init() {
         (left, right) => new Date(right.lastOpened ?? 0) - new Date(left.lastOpened ?? 0),
       );
       await saveDocument(state.currentDocument);
+      markSaved();
       setReaderUrl(documentRecord.id, viewerState.currentPage);
-      await restoreDrafts();
+      await restoreDraft();
       setStatus(elements.appStatus, `${documentRecord.name} is ready.`);
       render();
     } catch (error) {
@@ -640,12 +796,14 @@ export async function init() {
       totalPages: state.totalPages,
       lastOpened: nowIso,
     };
+
     state.progressRecords = upsertRecord(state.progressRecords, progressRecord, "documentId");
     state.documents = upsertRecord(state.documents, state.currentDocument).sort(
       (left, right) => new Date(right.lastOpened ?? 0) - new Date(left.lastOpened ?? 0),
     );
 
     await Promise.all([saveProgress(progressRecord), saveDocument(state.currentDocument)]);
+    markSaved();
 
     const visitToken = `${state.currentDocument.id}:${dayStamp()}:${state.currentPage}`;
 
@@ -663,12 +821,18 @@ export async function init() {
       await saveStat(visitRecord);
     }
 
-    if (!elements.noteSnippetInput.value.trim() && !elements.noteContentInput.value.trim()) {
+    if (!elements.noteContentInput.value.trim() && !elements.noteTermInput.value.trim()) {
       elements.notePageInput.value = String(state.currentPage);
     }
 
     setReaderUrl(state.currentDocument.id, state.currentPage);
     render();
+
+    if (state.pendingFocusNoteId) {
+      const noteId = state.pendingFocusNoteId;
+      state.pendingFocusNoteId = null;
+      pulseNote(noteId);
+    }
   }
 
   async function openPdf(file) {
@@ -694,6 +858,7 @@ export async function init() {
 
   async function persistTimerAndRender() {
     await saveSetting(SETTING_KEYS.activeTimer, timer.getSerializableState());
+    markSaved();
     render();
   }
 
@@ -725,77 +890,51 @@ export async function init() {
         new Date(right.endedAt ?? right.startedAt ?? 0) -
         new Date(left.endedAt ?? left.startedAt ?? 0),
     );
+    markSaved();
+    render();
     showToast("Reading session saved locally.", elements.toastRegion);
   }
 
-  async function saveAnnotation(event) {
+  async function saveQuickNote(event) {
     event.preventDefault();
 
     if (!state.currentDocument) {
       return;
     }
 
-    const selectedText = elements.noteSnippetInput.value.trim();
-    const content = elements.noteContentInput.value.trim();
+    const parsed = parseQuickNote(
+      state.composerType,
+      elements.noteTermInput.value,
+      elements.noteContentInput.value,
+    );
 
-    if (!selectedText && !content) {
-      showToast("Add a snippet, a note, or both before saving.", elements.toastRegion);
+    if (!parsed.content && !parsed.selectedText && !parsed.term) {
+      showToast("Add a note before saving.", elements.toastRegion);
       return;
     }
 
     const noteRecord = createNoteRecord({
       documentId: state.currentDocument.id,
       page: clamp(Number(elements.notePageInput.value) || state.currentPage, 1, Math.max(1, state.totalPages)),
-      type: elements.noteTypeSelect.value,
-      selectedText,
-      content,
+      type: state.composerType,
+      selectedText: parsed.selectedText,
+      term: parsed.term,
+      content: parsed.content || parsed.selectedText || parsed.term,
     });
 
     await saveNote(noteRecord);
     state.notes = upsertRecord(state.notes, noteRecord).sort(sortNotes);
-    await deleteSetting(getAnnotationDraftKey(state.currentDocument.id));
-    elements.notePageInput.value = String(state.currentPage);
-    elements.noteSnippetInput.value = "";
+    await deleteSetting(getDraftKey(state.currentDocument.id));
+    elements.noteTermInput.value = "";
     elements.noteContentInput.value = "";
-    elements.noteAutosaveHint.textContent = "Annotation saved locally.";
+    elements.noteAutosaveHint.textContent =
+      state.composerType === "definition"
+        ? "Definition saved to this PDF's glossary."
+        : `Saved on page ${noteRecord.page}.`;
+    markSaved();
     render();
     pulseNote(noteRecord.id);
-    showToast(`Annotation saved to page ${noteRecord.page}.`, elements.toastRegion);
-  }
-
-  async function saveGlossaryEntry(event) {
-    event.preventDefault();
-
-    if (!state.currentDocument) {
-      return;
-    }
-
-    const term = elements.glossaryTermInput.value.trim();
-    const definition = elements.glossaryDefinitionInput.value.trim();
-
-    if (!term || !definition) {
-      showToast("Add both a term and a definition.", elements.toastRegion);
-      return;
-    }
-
-    const noteRecord = createNoteRecord({
-      documentId: state.currentDocument.id,
-      page: state.currentPage,
-      type: "definition",
-      selectedText: term,
-      term,
-      content: definition,
-    });
-
-    await saveNote(noteRecord);
-    state.notes = upsertRecord(state.notes, noteRecord).sort(sortNotes);
-    await deleteSetting(getGlossaryDraftKey(state.currentDocument.id));
-    elements.glossaryTermInput.value = "";
-    elements.glossaryDefinitionInput.value = "";
-    setReaderTab("glossary");
-    render();
-    pulseNote(noteRecord.id);
-    showToast("Glossary entry saved for this PDF.", elements.toastRegion);
+    showToast(`Saved to page ${noteRecord.page}.`, elements.toastRegion);
   }
 
   async function jumpToPage(pageNumber) {
@@ -820,12 +959,6 @@ export async function init() {
     void openPdf(file);
   });
 
-  elements.readerTabButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      setReaderTab(button.dataset.readerTab);
-    });
-  });
-
   elements.previousPageButton.addEventListener("click", () => {
     void viewer.previousPage();
   });
@@ -841,71 +974,15 @@ export async function init() {
       void jumpToPage(elements.pageNumberInput.value);
     }
   });
+
+  elements.zoomInButton.addEventListener("click", () => {
+    void viewer.zoomIn();
+  });
   elements.zoomOutButton.addEventListener("click", () => {
     void viewer.zoomOut();
   });
   elements.resetZoomButton.addEventListener("click", () => {
     void viewer.resetZoom();
-  });
-  elements.zoomInButton.addEventListener("click", () => {
-    void viewer.zoomIn();
-  });
-
-  elements.annotationForm.addEventListener("submit", (event) => {
-    void saveAnnotation(event);
-  });
-  [elements.notePageInput, elements.noteTypeSelect, elements.noteSnippetInput, elements.noteContentInput].forEach(
-    (field) => {
-      field.addEventListener("input", () => {
-        scheduleAnnotationDraftSave();
-      });
-    },
-  );
-
-  elements.glossaryForm.addEventListener("submit", (event) => {
-    void saveGlossaryEntry(event);
-  });
-  [elements.glossaryTermInput, elements.glossaryDefinitionInput].forEach((field) => {
-    field.addEventListener("input", () => {
-      scheduleGlossaryDraftSave();
-    });
-  });
-  elements.glossarySearchInput.addEventListener("input", () => {
-    render();
-  });
-
-  elements.currentPageNotesList.addEventListener("click", (event) => {
-    const focusTrigger = event.target.closest("[data-focus-note]");
-
-    if (focusTrigger) {
-      pulseNote(focusTrigger.dataset.focusNote);
-    }
-  });
-
-  elements.pageAnnotationOverlay.addEventListener("click", (event) => {
-    const focusTrigger = event.target.closest("[data-focus-note]");
-
-    if (focusTrigger) {
-      pulseNote(focusTrigger.dataset.focusNote);
-    }
-  });
-
-  elements.sidebarGlossaryList.addEventListener("click", (event) => {
-    const jumpTrigger = event.target.closest("[data-jump-page]");
-
-    if (jumpTrigger) {
-      void jumpToPage(jumpTrigger.dataset.jumpPage);
-    }
-  });
-
-  elements.recentDocumentsList.addEventListener("click", (event) => {
-    const trigger = event.target.closest("[data-open-document]");
-
-    if (!trigger) {
-      return;
-    }
-
-    void openCachedDocument(trigger.dataset.openDocument);
   });
 
   elements.timerStartPauseButton.addEventListener("click", () => {
@@ -922,18 +999,86 @@ export async function init() {
     void resetTimer();
   });
 
+  elements.noteFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setNoteFilter(button.dataset.noteFilter);
+      render();
+    });
+  });
+
+  elements.composeTypeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setComposerType(button.dataset.composeType);
+      render();
+      if (state.composerType === "definition") {
+        elements.noteTermInput.focus();
+      } else {
+        elements.noteContentInput.focus();
+      }
+    });
+  });
+
+  elements.quickNoteForm.addEventListener("submit", (event) => {
+    void saveQuickNote(event);
+  });
+
+  elements.noteTermInput.addEventListener("input", () => {
+    scheduleDraftSave();
+  });
+  elements.noteContentInput.addEventListener("input", () => {
+    scheduleDraftSave();
+  });
+  elements.noteContentInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      elements.quickNoteForm.requestSubmit();
+    }
+  });
+
+  elements.documentNotesList.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-open-note]");
+
+    if (!trigger) {
+      return;
+    }
+
+    const noteId = trigger.dataset.openNote;
+    const page = Number(trigger.dataset.notePage);
+
+    state.pendingFocusNoteId = noteId;
+
+    if (page === state.currentPage) {
+      state.pendingFocusNoteId = null;
+      pulseNote(noteId);
+      return;
+    }
+
+    void jumpToPage(page);
+  });
+
+  elements.pageAnnotationOverlay.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-focus-note]");
+
+    if (trigger) {
+      pulseNote(trigger.dataset.focusNote);
+    }
+  });
+
+  elements.recentDocumentsList.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-open-document]");
+
+    if (!trigger) {
+      return;
+    }
+
+    void openCachedDocument(trigger.dataset.openDocument);
+  });
+
   elements.dismissReaderHelperButton.addEventListener("click", async () => {
     state.helperDismissed = true;
     elements.readerHelperPanel.hidden = true;
     await saveSetting(SETTING_KEYS.readerHelperDismissed, true);
-  });
-
-  elements.themeButtons.forEach((button) => {
-    button.addEventListener("click", async () => {
-      state.theme = button.dataset.themeChoice;
-      applyTheme(state.theme, elements.themeButtons);
-      await persistTheme(state.theme);
-    });
+    markSaved();
   });
 
   document.addEventListener("keydown", (event) => {
@@ -966,7 +1111,6 @@ export async function init() {
 
     if (event.key.toLowerCase() === "n") {
       event.preventDefault();
-      setReaderTab("annotations");
       elements.noteContentInput.focus();
       return;
     }
@@ -992,7 +1136,7 @@ export async function init() {
     state.activeDocumentId = getQueryParam("doc") ?? model.activeDocumentId;
     state.helperDismissed = model.readerHelperDismissed;
 
-    applyTheme(state.theme, elements.themeButtons);
+    applyTheme(state.theme);
     timer.restore(model.activeTimerState);
 
     const initialPage = Number(getQueryParam("page")) || null;
@@ -1000,7 +1144,7 @@ export async function init() {
     if (state.activeDocumentId) {
       await openCachedDocument(state.activeDocumentId, initialPage);
     } else {
-      await restoreDrafts();
+      await restoreDraft();
       render();
     }
 
@@ -1014,8 +1158,7 @@ export async function init() {
   }
 
   window.addEventListener("beforeunload", () => {
-    void persistAnnotationDraftNow();
-    void persistGlossaryDraftNow();
+    void persistDraftNow();
     timer.destroy();
   });
 }
