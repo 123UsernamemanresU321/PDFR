@@ -244,18 +244,36 @@
                 </div>
 
                 <div class="viewer-frame" id="viewerFrame">
-                  <div class="viewer-placeholder" id="viewerPlaceholder">
-                    <h2>Reader ready</h2>
-                    <p>
-                      Open a stored document or import a new PDF. This view shows one page at a time for
-                      fast navigation and minimal distraction.
-                    </p>
-                    <button class="pill-button pill-button--primary" id="viewerOpenPdfBtn" type="button">
-                      Choose PDF
-                    </button>
-                  </div>
-                  <div class="viewer-canvas-wrap is-hidden" id="viewerCanvasWrap">
-                    <canvas id="pdfCanvas"></canvas>
+                  <div class="viewer-paper" id="viewerPaper">
+                    <div class="viewer-placeholder" id="viewerPlaceholder">
+                      <h2>Reader ready</h2>
+                      <p>
+                        Open a stored document or import a new PDF. Once a page is rendered, select any text
+                        directly on the document to capture a highlighted snippet or turn it into a note.
+                      </p>
+                      <button class="pill-button pill-button--primary" id="viewerOpenPdfBtn" type="button">
+                        Choose PDF
+                      </button>
+                    </div>
+                    <div class="viewer-canvas-wrap is-hidden" id="viewerCanvasWrap">
+                      <div class="viewer-page" id="viewerPage">
+                        <canvas id="pdfCanvas" class="pdf-canvas"></canvas>
+                        <div class="pdf-highlight-layer" id="pdfHighlightLayer" aria-hidden="true"></div>
+                        <div class="pdf-text-layer" id="pdfTextLayer" aria-label="Selectable document text"></div>
+                        <div class="selection-toolbar is-hidden" id="selectionToolbar" aria-live="polite">
+                          <div class="selection-toolbar__label">Selected text</div>
+                          <div class="selection-toolbar__text" id="selectionToolbarText"></div>
+                          <div class="selection-toolbar__actions">
+                            <button class="pill-button pill-button--secondary" id="selectionUseBtn" type="button">
+                              Add to note
+                            </button>
+                            <button class="pill-button pill-button--primary" id="selectionSaveBtn" type="button">
+                              Save highlight
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -333,7 +351,7 @@
                     <p class="eyebrow">New note</p>
                     <h2>Page <span id="quickNotePageLabel">1</span></h2>
                   </div>
-                  <button class="text-button" id="toggleSnippetBtn" type="button">Add snippet</button>
+                  <button class="text-button" id="toggleSnippetBtn" type="button">Selected text</button>
                 </div>
                 <label class="sr-only" for="quickNoteInput">Quick note</label>
                 <textarea
@@ -347,11 +365,11 @@
                   id="selectedTextInput"
                   class="quick-note-card__textarea quick-note-card__textarea--secondary is-hidden"
                   rows="3"
-                  placeholder="Optional quoted text or highlighted snippet"
+                  placeholder="Selected text from the PDF appears here automatically."
                 ></textarea>
                 <div class="chip-row chip-row--tight" id="quickNoteTypeGroup" aria-label="Choose note tag"></div>
                 <div class="quick-note-card__footer">
-                  <p>Autosaved immediately to your local browser storage.</p>
+                  <p id="quickNoteLinkLabel">Linking to current page.</p>
                   <button class="pill-button pill-button--primary" type="submit">Save note</button>
                 </div>
               </form>

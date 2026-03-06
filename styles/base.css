@@ -160,13 +160,13 @@ ul {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 7.5rem;
-  padding: 0.45rem 0.75rem;
-  border-radius: 0.6rem;
+  min-width: 6.75rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.45rem;
   background: var(--success-soft);
   color: var(--success);
   font-family: var(--font-mono);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 

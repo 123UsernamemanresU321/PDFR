@@ -28,9 +28,27 @@ body[data-theme="dark"] .command-palette {
   background: rgba(10, 15, 24, 0.88);
 }
 
+body[data-theme="dark"] .sidebar__sticky,
+body[data-theme="dark"] .quick-note-card,
+body[data-theme="dark"] .selection-toolbar {
+  background: rgba(21, 33, 51, 0.96);
+}
+
+body[data-theme="dark"] .selection-toolbar {
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
 body[data-theme="dark"] .viewer-frame,
 body[data-theme="dark"] .upload-zone {
   background: rgba(21, 33, 51, 0.78);
+}
+
+body[data-theme="dark"] .viewer-panel {
+  background: rgba(27, 41, 64, 0.74);
+}
+
+body[data-theme="dark"] .viewer-page {
+  background: #fcfcfd;
 }
 
 body[data-theme="sepia"] {
@@ -50,6 +68,12 @@ body[data-theme="sepia"] {
   --border-strong: rgba(128, 96, 59, 0.28);
 }
 
+body[data-theme="sepia"] .sidebar__sticky,
+body[data-theme="sepia"] .quick-note-card,
+body[data-theme="sepia"] .selection-toolbar {
+  background: rgba(253, 247, 235, 0.96);
+}
+
 body[data-high-contrast="true"] {
   --text-body: var(--text-strong);
   --text-muted: color-mix(in srgb, var(--text-strong) 68%, white 32%);
@@ -59,6 +83,7 @@ body[data-high-contrast="true"] {
 }
 
 body[data-high-contrast="true"] .note-card__selected,
+body[data-high-contrast="true"] .notes-manager-card__selected,
 body[data-high-contrast="true"] .stats-section,
 body[data-high-contrast="true"] .glossary-detail__snippet {
   background: color-mix(in srgb, var(--bg-panel) 82%, var(--text-strong) 18%);

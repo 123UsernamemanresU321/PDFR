@@ -17,6 +17,7 @@ export function createNote({
   type,
   content,
   selectedText = "",
+  selectionRects = [],
   color = "",
 }) {
   return {
@@ -26,6 +27,7 @@ export function createNote({
     type,
     content: content.trim(),
     selectedText: selectedText.trim(),
+    selectionRects: Array.isArray(selectionRects) ? selectionRects : [],
     color,
     createdAt: Date.now(),
     updatedAt: Date.now(),

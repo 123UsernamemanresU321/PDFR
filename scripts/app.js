@@ -74,6 +74,7 @@ const state = {
   glossaryQuery: "",
   selectedGlossaryId: null,
   snippetVisible: false,
+  selection: null,
   commandQuery: "",
   commandActiveIndex: 0,
   commandActions: [],
@@ -128,7 +129,15 @@ function cacheDom() {
     viewerPlaceholder: document.getElementById("viewerPlaceholder"),
     viewerCanvasWrap: document.getElementById("viewerCanvasWrap"),
     viewerFrame: document.getElementById("viewerFrame"),
+    viewerPaper: document.getElementById("viewerPaper"),
+    viewerPage: document.getElementById("viewerPage"),
     pdfCanvas: document.getElementById("pdfCanvas"),
+    pdfTextLayer: document.getElementById("pdfTextLayer"),
+    pdfHighlightLayer: document.getElementById("pdfHighlightLayer"),
+    selectionToolbar: document.getElementById("selectionToolbar"),
+    selectionToolbarText: document.getElementById("selectionToolbarText"),
+    selectionUseBtn: document.getElementById("selectionUseBtn"),
+    selectionSaveBtn: document.getElementById("selectionSaveBtn"),
     focusModeBtn: document.getElementById("focusModeBtn"),
     exportMarkdownBtn: document.getElementById("exportMarkdownBtn"),
     sidebarExportBtn: document.getElementById("sidebarExportBtn"),
@@ -147,6 +156,7 @@ function cacheDom() {
     noteList: document.getElementById("noteList"),
     quickNoteForm: document.getElementById("quickNoteForm"),
     quickNotePageLabel: document.getElementById("quickNotePageLabel"),
+    quickNoteLinkLabel: document.getElementById("quickNoteLinkLabel"),
     quickNoteInput: document.getElementById("quickNoteInput"),
     selectedTextInput: document.getElementById("selectedTextInput"),
     toggleSnippetBtn: document.getElementById("toggleSnippetBtn"),
@@ -237,6 +247,85 @@ function getTodayStats() {
 
 function getDailyGoal() {
   return Math.max(1, Number(state.goal?.targetPagesPerDay) || DEFAULT_DAILY_GOAL);
+}
+
+function getQuickNotePage() {
+  return state.selection?.page || state.currentPage;
+}
+
+function buildSelectionFallback(type, selectedText) {
+  if (!selectedText) {
+    return "";
+  }
+
+  const defaults = {
+    definition: "Definition captured from highlighted text.",
+    quote: "Highlighted passage.",
+    "exam-point": "Highlighted for revision.",
+    question: "Review this highlighted passage.",
+  };
+
+  return defaults[type] || "Highlighted passage.";
+}
+
+function hideSelectionToolbar() {
+  refs.selectionToolbar.classList.add("is-hidden");
+  refs.selectionToolbar.style.removeProperty("left");
+  refs.selectionToolbar.style.removeProperty("top");
+}
+
+function renderSelectionToolbar() {
+  const currentSelection = state.selection;
+  if (!currentSelection || currentSelection.page !== state.currentPage) {
+    hideSelectionToolbar();
+    return;
+  }
+
+  refs.selectionToolbarText.textContent =
+    currentSelection.text.length > 120 ? `${currentSelection.text.slice(0, 117)}...` : currentSelection.text;
+  refs.selectionToolbar.style.left = `${currentSelection.toolbar.left * 100}%`;
+  refs.selectionToolbar.style.top = `${currentSelection.toolbar.top * 100}%`;
+  refs.selectionToolbar.classList.remove("is-hidden");
+}
+
+function clearSelectionState({ keepSnippet = false, clearBrowserSelection = false } = {}) {
+  state.selection = null;
+  hideSelectionToolbar();
+  pdfViewer?.clearSelection(clearBrowserSelection);
+
+  if (!keepSnippet) {
+    refs.selectedTextInput.value = "";
+    state.snippetVisible = false;
+    refs.selectedTextInput.classList.add("is-hidden");
+  }
+}
+
+function handlePdfSelection(selection) {
+  if (!selection) {
+    hideSelectionToolbar();
+    return;
+  }
+
+  state.selection = selection;
+  state.snippetVisible = true;
+  refs.selectedTextInput.value = selection.text;
+  refs.selectedTextInput.classList.remove("is-hidden");
+  renderSelectionToolbar();
+  renderWorkspace();
+}
+
+function syncViewerHighlights() {
+  const currentDocument = getCurrentDocument();
+  if (!currentDocument) {
+    pdfViewer?.setHighlights([]);
+    return;
+  }
+
+  pdfViewer?.setHighlights(
+    state.notes.filter(
+      (note) => note.documentId === currentDocument.id && note.page === state.currentPage && note.selectionRects?.length,
+    ),
+  );
 }
 
 function setActiveView(viewName) {
@@ -384,6 +473,7 @@ function renderWorkspace() {
   const currentDocument = getCurrentDocument();
   const documentNotes = getCurrentDocumentNotes();
   const todayProgress = calculateGoalProgress(getDailyGoal(), getTodayStats());
+  const quickNotePage = getQuickNotePage();
 
   refs.documentSectionLabel.textContent = currentDocument ? "Reader" : "No document";
   refs.documentTitle.textContent = currentDocument ? currentDocument.name : "Open a document to begin";
@@ -395,7 +485,11 @@ function renderWorkspace() {
   refs.progressChip.textContent = `Page ${state.currentPage} of ${state.totalPages}`;
   refs.goalChip.textContent = `Today ${todayProgress.pagesRead} / ${todayProgress.targetPages} pages`;
   refs.zoomValue.textContent = `${state.zoomPercent}%`;
-  refs.quickNotePageLabel.textContent = String(state.currentPage);
+  refs.quickNotePageLabel.textContent = String(quickNotePage);
+  refs.quickNoteLinkLabel.textContent =
+    state.selection?.page && state.selection.page !== state.currentPage
+      ? `Highlight selected from page ${state.selection.page}.`
+      : `Linking to page ${quickNotePage}.`;
   refs.goalPercentLabel.textContent = `${todayProgress.percent}%`;
   refs.goalProgressFill.style.width = `${todayProgress.percent}%`;
   refs.goalStatusText.textContent = todayProgress.message;
@@ -404,6 +498,7 @@ function renderWorkspace() {
   refs.viewerPlaceholder.classList.toggle("is-hidden", Boolean(currentDocument));
   refs.viewerCanvasWrap.classList.toggle("is-hidden", !currentDocument);
   refs.selectedTextInput.classList.toggle("is-hidden", !state.snippetVisible);
+  refs.toggleSnippetBtn.textContent = state.snippetVisible ? "Hide selection" : "Selected text";
   refs.noteSearchInput.value = state.sidebarQuery;
   refs.quickNoteInput.disabled = !currentDocument;
   refs.selectedTextInput.disabled = !currentDocument;
@@ -420,7 +515,7 @@ function renderWorkspace() {
 
   renderNoteList(refs.noteList, documentNotes, state.documentsById, {
     emptyTitle: "No notes for this document",
-    emptyMessage: "Press N or use the quick note form to capture something worth revisiting.",
+    emptyMessage: "Select text in the PDF or use the quick note form to capture something worth revisiting.",
     onDelete: (noteId) => confirmNoteDelete(noteId),
   });
 
@@ -428,6 +523,8 @@ function renderWorkspace() {
     currentDocument ? entry.documentId === currentDocument.id : true,
   );
   renderGlossaryPreview(refs.glossaryPreviewList, glossaryEntries, { onOpen: openGlossaryTerm });
+  renderSelectionToolbar();
+  syncViewerHighlights();
 }
 
 function renderNotesManager() {
@@ -617,6 +714,7 @@ async function restoreSnapshot() {
   state.glossaryQuery = "";
   state.selectedGlossaryId = null;
   state.snippetVisible = false;
+  state.selection = null;
   state.pendingSettings = null;
   applySettings();
   rebuildMaps();
@@ -632,6 +730,7 @@ async function openStoredDocument(documentId) {
   }
 
   state.currentDocumentId = documentId;
+  clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
   state.activeView = "workspace";
   setActiveView("workspace");
   await pdfViewer.loadDocument(documentRecord.fileData);
@@ -679,6 +778,7 @@ async function importPdfFile(file) {
   };
 
   state.currentDocumentId = documentId;
+  clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
   setActiveView("workspace");
   await pdfViewer.loadDocument(new Uint8Array(arrayBuffer));
   nextRecord.totalPages = pdfViewer.getState().totalPages;
@@ -775,19 +875,28 @@ async function finalizeSession() {
   setSaveStatus("Session logged locally");
 }
 
-async function saveQuickNote() {
+async function saveQuickNote({ allowSelectionOnly = false } = {}) {
   const currentDocument = getCurrentDocument();
   const content = refs.quickNoteInput.value.trim();
-  if (!currentDocument || !content) {
+  const selectedText = refs.selectedTextInput.value.trim();
+  const noteType = state.settings.lastNoteType || DEFAULT_NOTE_TYPE;
+  const targetPage = getQuickNotePage();
+  const noteContent = content || (allowSelectionOnly ? buildSelectionFallback(noteType, selectedText) : "");
+
+  if (!currentDocument || !noteContent) {
+    if (currentDocument) {
+      showToast(refs.toastRegion, "Add a note or save a highlighted selection first.");
+    }
     return;
   }
 
   const note = createNote({
     documentId: currentDocument.id,
-    page: state.currentPage,
-    type: state.settings.lastNoteType || DEFAULT_NOTE_TYPE,
-    content,
-    selectedText: refs.selectedTextInput.value,
+    page: targetPage,
+    type: noteType,
+    content: noteContent,
+    selectedText,
+    selectionRects: state.selection?.page === targetPage && selectedText ? state.selection.rects : [],
   });
 
   await storage.saveNote(note);
@@ -796,11 +905,9 @@ async function saveQuickNote() {
   await storage.saveFlashcard(flashcard);
   state.flashcards = [flashcard, ...state.flashcards.filter((item) => item.id !== flashcard.id)];
   refs.quickNoteInput.value = "";
-  refs.selectedTextInput.value = "";
-  state.snippetVisible = false;
-  refs.selectedTextInput.classList.add("is-hidden");
+  clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
   renderApp();
-  setSaveStatus("Note saved locally");
+  setSaveStatus(selectedText ? "Note and highlight saved locally" : "Note saved locally");
 }
 
 function openOverlay(overlay) {
@@ -888,6 +995,9 @@ function confirmDocumentDelete(documentId) {
     message: `Remove "${documentRecord?.name || "this document"}" and its saved progress, notes, and flashcards from local storage?`,
     confirmLabel: "Remove document",
     onAccept: async () => {
+      if (state.currentDocumentId === documentId) {
+        clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
+      }
       await storage.deleteDocument(documentId);
       state.documents = state.documents.filter((document) => document.id !== documentId);
       state.progress = state.progress.filter((progress) => progress.documentId !== documentId);
@@ -1038,7 +1148,10 @@ function bindEvents() {
   const openPdf = () => refs.pdfFileInput.click();
   const openJson = () => refs.jsonImportInput.click();
 
-  refs.homeBtn.addEventListener("click", () => setActiveView("landing"));
+  refs.homeBtn.addEventListener("click", () => {
+    clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
+    setActiveView("landing");
+  });
   refs.openPdfBtn.addEventListener("click", openPdf);
   refs.heroOpenPdfBtn.addEventListener("click", openPdf);
   refs.viewerOpenPdfBtn.addEventListener("click", openPdf);
@@ -1136,6 +1249,33 @@ function bindEvents() {
   refs.toggleSnippetBtn.addEventListener("click", () => {
     state.snippetVisible = !state.snippetVisible;
     refs.selectedTextInput.classList.toggle("is-hidden", !state.snippetVisible);
+    if (!state.snippetVisible && !refs.selectedTextInput.value.trim()) {
+      clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
+    }
+    renderWorkspace();
+  });
+  refs.selectedTextInput.addEventListener("input", (event) => {
+    if (!event.target.value.trim()) {
+      clearSelectionState({ keepSnippet: false, clearBrowserSelection: true });
+      renderWorkspace();
+      return;
+    }
+    state.snippetVisible = true;
+    renderWorkspace();
+  });
+  refs.selectionUseBtn.addEventListener("click", () => {
+    if (!state.selection) {
+      return;
+    }
+    state.snippetVisible = true;
+    refs.selectedTextInput.value = state.selection.text;
+    refs.selectedTextInput.classList.remove("is-hidden");
+    hideSelectionToolbar();
+    refs.quickNoteInput.focus();
+    setSaveStatus(`Selection linked to page ${state.selection.page}`);
+  });
+  refs.selectionSaveBtn.addEventListener("click", () => {
+    void saveQuickNote({ allowSelectionOnly: true });
   });
 
   refs.goalForm.addEventListener("submit", async (event) => {
@@ -1279,6 +1419,9 @@ async function initialize() {
     frame: refs.viewerFrame,
     placeholder: refs.viewerPlaceholder,
     canvasWrap: refs.viewerCanvasWrap,
+    page: refs.viewerPage,
+    textLayer: refs.pdfTextLayer,
+    highlightLayer: refs.pdfHighlightLayer,
     onPageRendered: ({ page, totalPages, zoomPercent }) => {
       state.currentPage = page;
       state.totalPages = totalPages;
@@ -1289,6 +1432,7 @@ async function initialize() {
       renderWorkspace();
       renderTopbar();
     },
+    onTextSelection: handlePdfSelection,
     onError: () => showToast(refs.toastRegion, "This PDF could not be rendered in the browser."),
   });
 

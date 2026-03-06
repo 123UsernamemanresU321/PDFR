@@ -99,6 +99,7 @@ export function renderRecentDocuments(container, documents, progressById, { onOp
 
 function noteCardMarkup(note, { documentsById, showDocumentName = false, manager = false }) {
   const noteType = getNoteType(note.type);
+  const noteLabel = note.type === "quote" && note.selectedText ? "Highlight" : noteType.label;
   const rootClass = manager ? "notes-manager-card" : "note-card";
   const createdAt = formatRelativeDate(note.createdAt);
   const documentLabel = showDocumentName ? documentsById.get(note.documentId)?.name || "Untitled document" : "";
@@ -109,7 +110,7 @@ function noteCardMarkup(note, { documentsById, showDocumentName = false, manager
         <div>
           <div class="${rootClass}__type" style="color:${noteType.color}">
             <span class="chip__dot" style="background:${noteType.color}"></span>
-            <span>${escapeHtml(noteType.label)}</span>
+            <span>${escapeHtml(noteLabel)}</span>
           </div>
           ${documentLabel ? `<div class="recent-document__meta" style="margin-top:0.35rem">${escapeHtml(documentLabel)}</div>` : ""}
         </div>
