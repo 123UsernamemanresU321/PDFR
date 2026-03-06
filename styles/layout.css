@@ -311,6 +311,47 @@
   min-height: calc(100vh - 13rem);
 }
 
+.reader-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(22rem, 2fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.reader-main-column,
+.reader-sidebar {
+  display: grid;
+  gap: 1rem;
+}
+
+.reader-main-column {
+  padding: 1rem;
+  min-height: calc(100vh - 11rem);
+}
+
+.reader-canvas-shell {
+  display: grid;
+  gap: 1rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: calc(100vh - 19rem);
+}
+
+.reader-page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.reader-sidebar {
+  position: sticky;
+  top: 5.8rem;
+  padding: 1rem;
+  max-height: calc(100vh - 6.8rem);
+  overflow: auto;
+}
+
 .reader-focus {
   display: grid;
   gap: 1rem;
@@ -366,6 +407,15 @@
   .study-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .reader-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reader-sidebar {
+    position: static;
+    max-height: none;
+  }
 }
 
 @media (max-width: 940px) {
@@ -376,6 +426,7 @@
 
   .site-header,
   .reader-toolbar-minimal,
+  .reader-page-toolbar,
   .reader-bottombar {
     position: static;
   }
@@ -394,6 +445,12 @@
 
   .site-nav {
     justify-content: flex-start;
+  }
+
+  .reader-page-toolbar,
+  .reader-bottombar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .note-drawer {

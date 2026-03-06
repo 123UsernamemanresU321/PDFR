@@ -66,6 +66,10 @@ export function buildNotesMarkdown(documentRecord, notes) {
       for (const note of typedNotes) {
         output.push(`- ${note.content.trim()}`);
 
+        if (note.term?.trim()) {
+          output.push(`  - Term: ${note.term.trim()}`);
+        }
+
         if (note.selectedText?.trim()) {
           output.push(`  - Snippet: "${note.selectedText.trim()}"`);
         }

@@ -1,6 +1,10 @@
 import { NOTE_TYPE_META } from "./notes.js";
 
 function extractTerm(note) {
+  if (note.term?.trim()) {
+    return note.term.trim();
+  }
+
   if (note.selectedText?.trim()) {
     return note.selectedText.trim();
   }
@@ -38,7 +42,7 @@ export function buildGlossary(notes, query = "") {
     .filter((note) => note.type === "definition" && note.content.trim())
     .map((note) => ({
       id: note.id,
-      term: extractTerm(note),
+      term: note.term?.trim() || extractTerm(note),
       definition: note.content.trim(),
       page: note.page,
     }))

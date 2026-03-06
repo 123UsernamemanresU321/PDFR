@@ -1,8 +1,11 @@
-export const NOTE_TYPES = ["definition", "quote", "exam point", "question"];
+export const NOTE_TYPES = ["definition", "highlight", "quote", "exam point", "question"];
 
 export const NOTE_TYPE_META = {
   definition: {
     label: "Definition",
+  },
+  highlight: {
+    label: "Highlight",
   },
   quote: {
     label: "Quote",
@@ -21,6 +24,7 @@ export function createNoteRecord({
   type,
   content,
   selectedText = "",
+  term = "",
   color = "",
 }) {
   return {
@@ -31,6 +35,7 @@ export function createNoteRecord({
     content: content.trim(),
     createdAt: new Date().toISOString(),
     selectedText: selectedText.trim(),
+    term: term.trim(),
     color,
   };
 }
@@ -67,7 +72,7 @@ export function filterNotes(notes, filters = {}) {
         return true;
       }
 
-      const haystack = [note.content, note.selectedText, note.type, String(note.page)]
+      const haystack = [note.content, note.selectedText, note.term, note.type, String(note.page)]
         .join(" ")
         .toLowerCase();
 
