@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PDF Reading Companion</title>
+    <meta
+      name="description"
+      content="A calm, local-first PDF reading workspace with notes, study sessions, goals, and export tools."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    >
+    <link rel="stylesheet" href="./styles/base.css">
+    <link rel="stylesheet" href="./styles/layout.css">
+    <link rel="stylesheet" href="./styles/components.css">
+    <link rel="stylesheet" href="./styles/themes.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar surface">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">PR</div>
+          <div>
+            <p class="eyebrow">Local-first study instrument</p>
+            <h1>PDF Reading Companion</h1>
+          </div>
+        </div>
+
+        <div class="toolbar-group" aria-label="Application toolbar">
+          <input id="pdfFileInput" type="file" accept="application/pdf" hidden>
+          <input id="backupImportInput" type="file" accept="application/json" hidden>
+
+          <button id="openPdfButton" class="button button-primary" type="button">Open PDF</button>
+          <button id="commandPaletteButton" class="button button-ghost" type="button">Quick actions</button>
+          <button id="exportNotesButton" class="button button-ghost" type="button" disabled>Export Notes</button>
+          <button id="exportBackupButton" class="button button-ghost" type="button">Backup JSON</button>
+          <button id="importBackupButton" class="button button-ghost" type="button">Import JSON</button>
+
+          <div class="theme-switch" role="group" aria-label="Theme switcher">
+            <button class="theme-button is-active" data-theme-choice="light" type="button">Light</button>
+            <button class="theme-button" data-theme-choice="dark" type="button">Dark</button>
+            <button class="theme-button" data-theme-choice="sepia" type="button">Sepia</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="reader-column" aria-label="Reader workspace">
+          <div class="reader-summary surface">
+            <div class="document-summary">
+              <span id="documentBadge" class="pill pill-muted">No document open</span>
+              <div>
+                <h2 id="documentTitle">Open a local PDF to begin</h2>
+                <p id="documentMeta">
+                  Your progress, notes, sessions, goals, and backups stay inside this browser.
+                </p>
+              </div>
+            </div>
+
+            <div class="metric-row" aria-label="Current reading metrics">
+              <article class="metric-chip">
+                <span class="metric-label">Progress</span>
+                <strong id="headerProgressValue">0%</strong>
+                <span id="headerProgressCopy">Choose a PDF to start reading.</span>
+              </article>
+              <article class="metric-chip">
+                <span class="metric-label">Goal today</span>
+                <strong id="headerGoalValue">0 / 12 pages</strong>
+                <span id="headerGoalCopy">Set a realistic pace, then chip away at it.</span>
+              </article>
+              <article class="metric-chip">
+                <span class="metric-label">Session</span>
+                <strong id="headerSessionValue">00:00:00</strong>
+                <span id="headerSessionCopy">Attach sessions to the active document automatically.</span>
+              </article>
+            </div>
+          </div>
+
+          <div class="reader-toolbar surface" aria-label="Reader controls">
+            <div class="toolbar-cluster">
+              <button id="previousPageButton" class="button button-ghost" type="button" disabled>Previous</button>
+
+              <label class="page-jump">
+                <span>Page</span>
+                <input id="pageNumberInput" type="number" min="1" step="1" value="1" inputmode="numeric" disabled>
+              </label>
+
+              <span id="pageTotalLabel" class="page-total">/ 0</span>
+              <button id="nextPageButton" class="button button-ghost" type="button" disabled>Next</button>
+            </div>
+
+            <div class="toolbar-cluster">
+              <button id="zoomOutButton" class="button button-ghost" type="button" disabled>-</button>
+              <button id="resetZoomButton" class="button button-ghost" type="button" disabled>Fit</button>
+              <button id="zoomInButton" class="button button-ghost" type="button" disabled>+</button>
+              <span id="zoomLabel" class="zoom-label">100%</span>
+            </div>
+          </div>
+
+          <section class="reader-stage surface" aria-label="PDF viewer">
+            <div id="viewerLoading" class="viewer-loading" hidden>Loading your document…</div>
+
+            <section id="emptyState" class="empty-state" aria-labelledby="emptyStateTitle">
+              <div class="empty-hero">
+                <div class="empty-copy">
+                  <p class="eyebrow">Distraction-free reading</p>
+                  <h3 id="emptyStateTitle">Turn a local PDF into a focused study workspace</h3>
+                  <p>
+                    Read textbooks, articles, lecture notes, and books with page-aware notes, session timing,
+                    glossary building, revision flashcards, and local-first backups.
+                  </p>
+                  <div class="button-row">
+                    <button id="openPdfEmptyButton" class="button button-primary" type="button">Open your first PDF</button>
+                    <button id="focusShortcutsButton" class="button button-ghost" type="button">View shortcuts</button>
+                  </div>
+                </div>
+
+                <div class="empty-visual" aria-hidden="true">
+                  <div class="paper-sheet paper-sheet-back"></div>
+                  <div class="paper-sheet paper-sheet-front">
+                    <div class="paper-line w-60"></div>
+                    <div class="paper-line w-90"></div>
+                    <div class="paper-line w-70"></div>
+                    <div class="paper-tags">
+                      <span class="pill">Definition</span>
+                      <span class="pill">Exam point</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <section class="how-grid" aria-label="How the app works">
+                <article class="how-card">
+                  <span class="how-step">1</span>
+                  <h4>Open a local PDF</h4>
+                  <p>Select a file from your device. The document stays local and renders in your browser with PDF.js.</p>
+                </article>
+                <article class="how-card">
+                  <span class="how-step">2</span>
+                  <h4>Read with context</h4>
+                  <p>Track your page, resume later, time sessions, and set a daily reading target that updates live.</p>
+                </article>
+                <article class="how-card">
+                  <span class="how-step">3</span>
+                  <h4>Capture and review</h4>
+                  <p>Save notes by page, search them, export them to Markdown, or turn them into flashcards and a glossary.</p>
+                </article>
+              </section>
+            </section>
+
+            <div id="canvasViewport" class="canvas-viewport" hidden>
+              <canvas id="pdfCanvas" aria-label="Rendered PDF page"></canvas>
+            </div>
+
+            <div class="progress-strip">
+              <div>
+                <strong id="progressLabel">Reading progress will appear here</strong>
+                <p id="progressSubLabel">Open a PDF to start tracking pages and progress.</p>
+              </div>
+              <div class="meter" aria-hidden="true">
+                <span id="progressBar"></span>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="sidebar-column" aria-label="Notes and study tools">
+          <section id="helperPanel" class="panel helper-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">First run</p>
+                <h3>Keep the workflow simple</h3>
+              </div>
+              <button id="dismissHelperButton" class="icon-button" type="button" aria-label="Dismiss helper panel">
+                Hide
+              </button>
+            </div>
+            <ul class="helper-list">
+              <li>Use the arrow keys to move page by page once a PDF is open.</li>
+              <li>Press <kbd>N</kbd> to jump directly into note capture.</li>
+              <li>Press <kbd>/</kbd> or <kbd>Ctrl</kbd> + <kbd>K</kbd> for quick actions.</li>
+              <li>Use Backup JSON regularly if you want a portable local archive.</li>
+            </ul>
+          </section>
+
+          <section class="panel study-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Study controls</p>
+                <h3>Timer and reading goal</h3>
+              </div>
+            </div>
+
+            <div class="study-grid">
+              <div class="timer-card">
+                <div class="timer-display" id="sessionTimerValue">00:00:00</div>
+                <p id="sessionTimerMeta" class="subtle-copy">Start a session and it will attach to the active document when possible.</p>
+                <div class="button-row">
+                  <button id="timerStartPauseButton" class="button button-primary" type="button">Start</button>
+                  <button id="timerResetButton" class="button button-ghost" type="button">Reset</button>
+                </div>
+              </div>
+
+              <form id="goalForm" class="goal-form">
+                <label>
+                  <span>Pages per day</span>
+                  <input id="dailyGoalInput" type="number" min="1" step="1" value="12" inputmode="numeric">
+                </label>
+                <button class="button button-ghost" type="submit">Save goal</button>
+                <p id="goalFeedback" class="subtle-copy">Set a daily target that feels repeatable, not heroic.</p>
+                <div class="meter meter-small" aria-hidden="true">
+                  <span id="goalProgressBar"></span>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <nav class="side-tabs" aria-label="Sidebar sections">
+            <button class="tab-button is-active" data-tab="notes" type="button">Notes</button>
+            <button class="tab-button" data-tab="glossary" type="button">Glossary</button>
+            <button class="tab-button" data-tab="revision" type="button">Revision</button>
+            <button class="tab-button" data-tab="stats" type="button">Stats</button>
+          </nav>
+
+          <section id="notesPanel" class="panel tab-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Capture</p>
+                <h3>Page-linked notes</h3>
+              </div>
+              <button id="newNoteButton" class="button button-ghost button-tight" type="button">New note</button>
+            </div>
+
+            <form id="noteForm" class="note-form">
+              <div class="form-row">
+                <label>
+                  <span>Page</span>
+                  <input id="notePageInput" type="number" min="1" step="1" value="1" inputmode="numeric">
+                </label>
+                <label>
+                  <span>Tag</span>
+                  <select id="noteTypeSelect">
+                    <option value="definition">Definition</option>
+                    <option value="quote">Quote</option>
+                    <option value="exam point">Exam point</option>
+                    <option value="question">Question</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                <span>Selected text snippet (optional)</span>
+                <input id="noteSnippetInput" type="text" maxlength="240" placeholder="Key phrase, quote fragment, or concept">
+              </label>
+
+              <label>
+                <span>Note</span>
+                <textarea
+                  id="noteContentInput"
+                  rows="6"
+                  placeholder="Capture the idea, definition, exam angle, or your own question."
+                ></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="button button-primary" type="submit">Save note</button>
+                <span id="noteAutosaveHint" class="subtle-copy">Drafts save locally while you type.</span>
+              </div>
+            </form>
+
+            <div class="notes-toolbar">
+              <label class="search-field">
+                <span class="sr-only">Search notes</span>
+                <input id="noteSearchInput" type="search" placeholder="Search notes">
+              </label>
+
+              <label>
+                <span class="sr-only">Filter notes by tag</span>
+                <select id="noteFilterSelect">
+                  <option value="all">All tags</option>
+                  <option value="definition">Definition</option>
+                  <option value="quote">Quote</option>
+                  <option value="exam point">Exam point</option>
+                  <option value="question">Question</option>
+                </select>
+              </label>
+            </div>
+
+            <p id="notesSummary" class="subtle-copy">Open a document to start collecting notes.</p>
+            <div id="notesList" class="notes-list" aria-live="polite"></div>
+          </section>
+
+          <section id="glossaryPanel" class="panel tab-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Definitions</p>
+                <h3>Glossary</h3>
+              </div>
+            </div>
+            <label class="search-field">
+              <span class="sr-only">Search glossary</span>
+              <input id="glossarySearchInput" type="search" placeholder="Search glossary terms">
+            </label>
+            <div id="glossaryList" class="glossary-list"></div>
+          </section>
+
+          <section id="revisionPanel" class="panel tab-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Review</p>
+                <h3>Revision mode</h3>
+              </div>
+            </div>
+
+            <div id="revisionEmptyState" class="revision-empty">
+              Add a few notes first, then flip through them as flashcards.
+            </div>
+
+            <article id="flashcard" class="flashcard" hidden>
+              <div class="flashcard-meta">
+                <span id="flashcardCounter">Card 1 of 1</span>
+                <span id="flashcardTag" class="pill"></span>
+              </div>
+              <div class="flashcard-face">
+                <p class="panel-eyebrow">Front</p>
+                <h4 id="flashcardFront">Concept</h4>
+              </div>
+              <div id="flashcardBackPanel" class="flashcard-back" hidden>
+                <p class="panel-eyebrow">Back</p>
+                <p id="flashcardBack">Explanation</p>
+              </div>
+            </article>
+
+            <div class="button-row">
+              <button id="flashcardPreviousButton" class="button button-ghost" type="button">Previous</button>
+              <button id="flashcardFlipButton" class="button button-primary" type="button">Flip</button>
+              <button id="flashcardNextButton" class="button button-ghost" type="button">Next</button>
+            </div>
+          </section>
+
+          <section id="statsPanel" class="panel tab-panel" hidden>
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Momentum</p>
+                <h3>Study stats</h3>
+              </div>
+            </div>
+
+            <div id="statsGrid" class="stats-grid"></div>
+            <div id="statsBreakdown" class="stats-breakdown"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">How it works</p>
+                <h3>Local by design</h3>
+              </div>
+            </div>
+            <div class="how-list">
+              <p>1. Open a PDF from your device.</p>
+              <p>2. The app remembers progress by document fingerprint when you reopen the same file later.</p>
+              <p>3. Notes, goals, streaks, and sessions live in IndexedDB in this browser until you clear them or import a backup.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-eyebrow">Recent documents</p>
+                <h3>Resume faster</h3>
+              </div>
+            </div>
+            <div id="recentDocumentsList" class="recent-documents"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="app-footer surface">
+        <p>All files, notes, timers, goals, and backups stay local in the browser. Nothing is uploaded or synced.</p>
+        <p id="appStatus" class="status-text" aria-live="polite">Ready.</p>
+      </footer>
+    </div>
+
+    <section id="commandPalette" class="command-palette" hidden aria-label="Quick actions">
+      <div class="command-dialog surface" role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle">
+        <div class="command-header">
+          <h2 id="commandPaletteTitle">Quick actions</h2>
+          <button id="closeCommandPaletteButton" class="icon-button" type="button" aria-label="Close quick actions">
+            Close
+          </button>
+        </div>
+        <label class="search-field">
+          <span class="sr-only">Search quick actions</span>
+          <input id="commandSearchInput" type="search" placeholder="Search commands">
+        </label>
+        <div id="commandList" class="command-list"></div>
+      </div>
+    </section>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <script type="module" src="./scripts/app.js"></script>
+  </body>
+</html>
